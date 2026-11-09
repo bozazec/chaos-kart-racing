@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, type Track } from "@kart/shared";
-import { buildItemBox, buildKartMesh, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
+import { buildItemBox, buildKartMesh, loadKartModel, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
 import { buildScenery } from "./scenery";
+import { buildKitProps, loadProps } from "./props";
 import { Minimap } from "./minimap";
 import type { Session } from "./session";
 import { HostSession } from "./net/host";
@@ -48,6 +49,7 @@ function applyTrack(id: number) {
   for (const m of boxMeshes) scene.remove(m);
   trackGroup = buildTrackMesh(track, def.theme);
   trackGroup.add(buildScenery(track, def.scenery, !!def.theme.glow));
+  trackGroup.add(buildKitProps(track, !!def.theme.glow));
   scene.add(trackGroup);
   boxMeshes = track.itemBoxes.map((b) => {
     const m = buildItemBox();
@@ -128,6 +130,8 @@ let session: Session | null = null;
 // test/debug hook
 (window as unknown as Record<string, unknown>).__kart = { get track() { return track; }, get session() { return session; } };
 applyTrack(0);
+// kit props load in the background; rebuild the scene dressing once they are in
+void loadProps().then(() => applyTrack(shownTrack));
 
 const roomUI = createRoomUI({
   startRace: () => session?.startRace?.(),
@@ -151,6 +155,7 @@ const home = createHome({
 home.show();
 
 async function start(kind: "solo" | "host" | "join", o: { name: string; character: number; roomName?: string; code?: string }) {
+  await Promise.all([loadKartModel(), loadProps()]);
   home.error(kind === "solo" ? "" : "connecting…");
   try {
     if (kind === "join") {

@@ -80,3 +80,10 @@ Gamepad: right trigger/A gas, left trigger/B brake, X item, Y special. Touch: le
 Character art and the logo are cropped from the supplied poster (`client/public/art`). The characters are real,
 named public figures: check likeness/publicity rights before any public or commercial release. Characters are
 data (`shared/src/characters.ts`), so names, art, stats and powers can be swapped in one place.
+
+## 3D models
+
+The kart body and the track props (barriers, start gantry, grandstands, garages, billboards, banner towers, light posts) come from
+Kenney's **Racing Kit** (CC0, https://kenney.nl/assets/racing-kit). The files live in `packages/client/public/models/`
+(`kart.glb`, `kit/*.glb`, licence in `KENNEY-LICENSE.txt`). Each kart is recoloured per character and gets a 3D chibi driver
+(`build3DKart` in `scene.ts`); the kit props are placed by `props.ts`. If a model fails to load the game falls back to the old sprite kart / plain scenery.

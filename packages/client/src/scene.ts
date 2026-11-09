@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { characterById, type Track, type TrackTheme } from "@kart/shared";
 
 export function buildTrackMesh(track: Track, theme: TrackTheme): THREE.Group {
@@ -88,6 +89,79 @@ function kartTexture(id: number, view: "f" | "b"): THREE.Texture {
   return t;
 }
 
+// ---- Kenney "Racing Kit" race car (CC0), recoloured per character. Falls back to the sprite kart if it can't load. ----
+let kartModel: THREE.Object3D | null = null;
+const KART_SCALE = 2.5;
+let modelLoad: Promise<void> | null = null;
+export function loadKartModel(): Promise<void> {
+  modelLoad ??= new GLTFLoader()
+    .loadAsync("/models/kart.glb")
+    .then((gltf) => {
+      // recentre on the origin (the model's root node is offset) and sit the wheels on y = 0
+      const pivot = new THREE.Group();
+      pivot.add(gltf.scene);
+      pivot.scale.setScalar(KART_SCALE);
+      pivot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(pivot);
+      gltf.scene.position.set(-(box.min.x + box.max.x) / 2 / KART_SCALE, -box.min.y / KART_SCALE, -(box.min.z + box.max.z) / 2 / KART_SCALE);
+      kartModel = pivot;
+    })
+    .catch((e) => console.warn("kart model failed to load, using fallback", e));
+  return modelLoad;
+}
+
+/** Recoloured copy of the car + a chibi 3D driver in the character's colours. Faces +z. */
+function build3DKart(g: THREE.Group, characterId: number) {
+  const { body: bodyC, accent, trim, skin, hair, metal } = characterById(characterId).kart;
+  const car = kartModel!.clone(true);
+  const mats = new Map<string, THREE.Material>();
+  car.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const src = m.material as THREE.MeshStandardMaterial;
+    let c = mats.get(src.name);
+    if (!c) {
+      const n = src.clone();
+      if (src.name === "red") {
+        n.color.setHex(bodyC);
+        if (metal) {
+          n.metalness = 0.55;
+          n.roughness = 0.35;
+        }
+      } else if (src.name === "grey") n.color.setHex(accent);
+      mats.set(src.name, n);
+      c = n;
+    }
+    m.material = c;
+  });
+  g.add(car);
+  // driver: torso + big head + hair + simple face
+  const d = new THREE.Group();
+  d.position.set(0, 0.62, -0.25);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.3, 4, 10), mat(trim));
+  torso.position.y = 0.3;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 14), mat(skin));
+  head.position.y = 0.98;
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.49, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.58), mat(hair));
+  hairCap.position.set(0, 0.98, -0.04);
+  hairCap.rotation.x = -0.3;
+  const helmetRim = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.05, 6, 24), mat(bodyC));
+  helmetRim.position.set(0, 0.84, 0);
+  helmetRim.rotation.x = Math.PI / 2;
+  d.add(torso, head, hairCap, helmetRim);
+  for (const sx of [-0.17, 0.17]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat(0xffffff));
+    eye.position.set(sx, 1.02, 0.4);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 6), mat(0x111111));
+    pupil.position.set(sx, 1.02, 0.46);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.4, 3, 8), mat(trim));
+    arm.position.set(sx * 2.1, 0.32, 0.3);
+    arm.rotation.x = Math.PI / 2.6;
+    d.add(eye, pupil, arm);
+  }
+  g.add(d);
+}
+
 const SPRITE = 2.8; // standee size in world units (kart + wheels are ~2.7 wide)
 const HALF_L = 1.15; // proxy kart half length: standees stand just outside both ends
 
@@ -101,44 +175,48 @@ const HALF_L = 1.15; // proxy kart half length: standees stand just outside both
 export function buildKartMesh(characterId: number): THREE.Group {
   const g = new THREE.Group();
   const { body: bodyC, trim, skin, hair, metal } = characterById(characterId).kart;
-  // proxy kart (hidden while a standee is facing the camera)
-  const proxy = new THREE.Group();
-  g.add(proxy);
-  g.userData.proxy = proxy;
-  proxy.add(box(1.5, 0.5, HALF_L * 2, bodyC, 0, 0.6, 0, metal));
-  proxy.add(box(1.0, 0.25, 0.8, trim, 0, 0.9, HALF_L - 0.1)); // hood
-  const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 14);
-  wheelGeo.rotateZ(Math.PI / 2);
-  const wheelMat = mat(0x151515);
-  for (const [x, z] of [[-1.0, 0.85], [1.0, 0.85], [-1.0, -0.85], [1.0, -0.85]] as const) {
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.position.set(x, 0.5, z);
-    proxy.add(w);
-  }
-  proxy.add(box(0.8, 0.6, 0.5, trim, 0, 1.15, -0.15)); // torso
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 14, 10), mat(skin));
-  head.position.set(0, 1.78, -0.1);
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.49, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mat(hair));
-  hairCap.position.copy(head.position);
-  hairCap.rotation.x = -0.25; // hair sweeps back
-  proxy.add(head, hairCap);
+  if (kartModel) build3DKart(g, characterId);
+  else {
+    // proxy kart (hidden while a standee is facing the camera)
+    const proxy = new THREE.Group();
+    g.add(proxy);
+    g.userData.proxy = proxy;
+    proxy.add(box(1.5, 0.5, HALF_L * 2, bodyC, 0, 0.6, 0, metal));
+    proxy.add(box(1.0, 0.25, 0.8, trim, 0, 0.9, HALF_L - 0.1)); // hood
+    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 14);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const wheelMat = mat(0x151515);
+    for (const [x, z] of [[-1.0, 0.85], [1.0, 0.85], [-1.0, -0.85], [1.0, -0.85]] as const) {
+      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      w.position.set(x, 0.5, z);
+      proxy.add(w);
+    }
+    proxy.add(box(0.8, 0.6, 0.5, trim, 0, 1.15, -0.15)); // torso
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 14, 10), mat(skin));
+    head.position.set(0, 1.78, -0.1);
+    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.49, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), mat(hair));
+    hairCap.position.copy(head.position);
+    hairCap.rotation.x = -0.25; // hair sweeps back
+    proxy.add(head, hairCap);
 
-  // standees
-  const mk = (view: "f" | "b") => {
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(SPRITE, SPRITE),
-      new THREE.MeshBasicMaterial({ map: kartTexture(characterId, view), transparent: true, depthWrite: false, opacity: view === "b" ? 1 : 0 }),
-    );
-    m.position.set(0, SPRITE / 2, view === "f" ? HALF_L + 0.12 : -HALF_L - 0.12);
-    if (view === "b") m.rotation.y = Math.PI;
-    m.renderOrder = 2;
-    return m;
-  };
-  const front = mk("f");
-  const back = mk("b");
-  g.add(front, back);
-  g.userData.front = front;
-  g.userData.back = back;
+    // standees
+    const mk = (view: "f" | "b") => {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(SPRITE, SPRITE),
+        new THREE.MeshBasicMaterial({ map: kartTexture(characterId, view), transparent: true, depthWrite: false, opacity: view === "b" ? 1 : 0 }),
+      );
+      m.position.set(0, SPRITE / 2, view === "f" ? HALF_L + 0.12 : -HALF_L - 0.12);
+      if (view === "b") m.rotation.y = Math.PI;
+      m.renderOrder = 2;
+      return m;
+    };
+    const front = mk("f");
+    const back = mk("b");
+    g.add(front, back);
+    g.userData.front = front;
+    g.userData.back = back;
+
+  }
 
   // effects, toggled from snapshot state
   const shield = new THREE.Mesh(new THREE.SphereGeometry(2.3, 20, 14), new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, depthWrite: false }));
@@ -170,6 +248,7 @@ const smooth = (a: number, b: number, x: number) => {
 
 /** Show the standee facing the camera (front or back view) and fade both out when seen from the side. */
 export function updateKartLook(kart: THREE.Group, cam: THREE.Vector3) {
+  if (!kart.userData.front) return; // real 3D kart: nothing to fade
   const dx = cam.x - kart.position.x;
   const dz = cam.z - kart.position.z;
   const len = Math.hypot(dx, dz) || 1;

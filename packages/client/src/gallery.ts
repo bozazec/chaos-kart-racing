@@ -3,7 +3,7 @@
 // Karts turn slowly so you see front, side and back views.
 import * as THREE from "three";
 import { CHARACTERS } from "@kart/shared";
-import { buildKartMesh, makeNameplate, updateKartLook } from "./scene";
+import { loadKartModel, buildKartMesh, makeNameplate, updateKartLook } from "./scene";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
@@ -18,6 +18,7 @@ const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshSt
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
+await loadKartModel();
 const cols = 4;
 const karts = CHARACTERS.map((c, i) => {
   const k = buildKartMesh(c.id);
