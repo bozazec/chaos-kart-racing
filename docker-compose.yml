@@ -1,0 +1,51 @@
+# Single-box deployment: game + signaling (:8787), dedicated rooms, and a TURN relay.
+# Put a TLS reverse proxy (Caddy/nginx/Traefik) in front of :8787 so the site is https/wss;
+# browsers only allow some WebRTC features and wss from secure origins.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports: ["8787:8787"]
+    environment:
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+
+  dedicated:
+    build: .
+    restart: unless-stopped
+    command: ["pnpm", "--filter", "@kart/server", "dedicated"]
+    depends_on: [app]
+    environment:
+      SIGNALING_URL: ws://app:8787
+      ROOM_NAME: Official
+      ROOMS: ${DEDICATED_ROOMS:-2}
+      MIN_PLAYERS: ${MIN_PLAYERS:-2}
+      AUTO_START_SEC: ${AUTO_START_SEC:-15}
+
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    command:
+      - -n
+      - --log-file=stdout
+      - --realm=${TURN_REALM}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET}
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --external-ip=${PUBLIC_IP}
+      - --fingerprint
+      - --no-cli
+      - --no-multicast-peers
+      # never relay into private networks (SSRF hardening)
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
