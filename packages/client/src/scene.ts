@@ -113,6 +113,59 @@ export function loadKartModel(): Promise<void> {
 }
 
 /** Recoloured copy of the car + a chibi 3D driver in the character's colours. Faces +z. */
+const headTex = new Map<number, THREE.CanvasTexture>();
+const HEAD_ZOOM = 0.9; // < 1 zooms the art in so the head outline reaches the edge of the ball
+/**
+ * One texture for the whole head ball: left half = face, right half = back of head (roster art), over a skin/hair
+ * fill that shows at the sides. Vertex UVs project each half straight along z (see build3DKart).
+ */
+function headTexture(id: number): THREE.CanvasTexture {
+  let t = headTex.get(id);
+  if (t) return t;
+  const { skin, hair } = characterById(id).kart;
+  const css = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+  const cv = document.createElement("canvas");
+  cv.width = 512;
+  cv.height = 256;
+  const ctx = cv.getContext("2d")!;
+  const base = () => {
+    ctx.fillStyle = css(skin);
+    ctx.fillRect(0, 0, 512, 256);
+    ctx.fillStyle = css(hair);
+    ctx.fillRect(0, 0, 512, 90);
+  };
+  base();
+  t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  headTex.set(id, t);
+  (["f", "b"] as const).forEach((v, i) => {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, i * 256, 0, 256, 256);
+      t!.needsUpdate = true;
+    };
+    img.src = `/art/heads/h${id}${v}.png`;
+  });
+  return t;
+}
+
+function headBall(id: number): THREE.Mesh {
+  const R = 0.46;
+  const geo = new THREE.SphereGeometry(R, 32, 24);
+  const pos = geo.attributes.position!;
+  const uv = geo.attributes.uv!;
+  for (let i = 0; i < pos.count; i++) {
+    const front = pos.getZ(i) >= 0;
+    const u = (front ? pos.getX(i) : -pos.getX(i)) / R;
+    const v = pos.getY(i) / R;
+    uv.setXY(i, ((u * HEAD_ZOOM * 0.5 + 0.5) * 0.5) + (front ? 0 : 0.5), v * HEAD_ZOOM * 0.5 + 0.5);
+  }
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: headTexture(id), roughness: 0.8, metalness: 0 }));
+  m.position.y = 0.98;
+  return m;
+}
+
 function build3DKart(g: THREE.Group, characterId: number) {
   const { body: bodyC, accent, trim, skin, hair, metal } = characterById(characterId).kart;
   const car = kartModel!.clone(true);
@@ -142,24 +195,13 @@ function build3DKart(g: THREE.Group, characterId: number) {
   d.position.set(0, 0.62, -0.25);
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.3, 4, 10), mat(trim));
   torso.position.y = 0.3;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 18, 14), mat(skin));
-  head.position.y = 0.98;
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.49, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.58), mat(hair));
-  hairCap.position.set(0, 0.98, -0.04);
-  hairCap.rotation.x = -0.3;
-  const helmetRim = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.05, 6, 24), mat(bodyC));
-  helmetRim.position.set(0, 0.84, 0);
-  helmetRim.rotation.x = Math.PI / 2;
-  d.add(torso, head, hairCap, helmetRim);
+  // head ball wrapped in the roster art: face on the front half, back of the head on the back half
+  d.add(torso, headBall(characterId));
   for (const sx of [-0.17, 0.17]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat(0xffffff));
-    eye.position.set(sx, 1.02, 0.4);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 6), mat(0x111111));
-    pupil.position.set(sx, 1.02, 0.46);
     const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.4, 3, 8), mat(trim));
     arm.position.set(sx * 2.1, 0.32, 0.3);
     arm.rotation.x = Math.PI / 2.6;
-    d.add(eye, pupil, arm);
+    d.add(arm);
   }
   g.add(d);
 }
