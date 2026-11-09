@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DEFAULT_PARAMS, trackPoint, type Track } from "@kart/shared";
+import { DEFAULT_PARAMS, trackPoint, type Track, type TilePlace } from "@kart/shared";
 
 /**
  * Props from Kenney's Racing Kit (CC0): start gantry, barriers, grandstands, billboards, banner towers, light posts.
  * Visual only. Placement derives from the track's own points, so every peer sees the same thing with no extra data.
  * Each model is recentred (x/z centre on the origin, base on y = 0); its front faces +z, its long side runs along x.
  */
-const NAMES = ["barrierWall", "overheadLights", "flagCheckers", "grandStandCovered", "grandStand", "billboard", "billboardLow", "bannerTowerGreen", "bannerTowerRed", "lightPostLarge", "pitsGarage"] as const;
+const NAMES = ["barrierWall", "overheadLights", "flagCheckers", "grandStandCovered", "grandStand", "billboard", "billboardLow", "bannerTowerGreen", "bannerTowerRed", "lightPostLarge", "pitsGarage", "roadStraight", "roadCornerLarge", "roadCornerLarger"] as const;
 type PropName = (typeof NAMES)[number];
 
 const lib = new Map<PropName, THREE.Group>();
@@ -39,6 +39,7 @@ interface Xf {
   sx: number;
   sy?: number;
   sz?: number;
+  y?: number;
 }
 
 const tmpM = new THREE.Matrix4();
@@ -50,7 +51,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 function instance(g: THREE.Group, name: PropName, list: Xf[]) {
   const model = lib.get(name);
   if (!model || list.length === 0) return;
-  const mats = list.map((t) => new THREE.Matrix4().compose(new THREE.Vector3(t.x, 0, t.z), tmpQ.setFromAxisAngle(UP, t.rot).clone(), new THREE.Vector3(t.sx, t.sy ?? t.sx, t.sz ?? t.sx)));
+  const mats = list.map((t) => new THREE.Matrix4().compose(new THREE.Vector3(t.x, t.y ?? 0, t.z), tmpQ.setFromAxisAngle(UP, t.rot).clone(), new THREE.Vector3(t.sx, t.sy ?? t.sx, t.sz ?? t.sx)));
   model.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
@@ -62,9 +63,25 @@ function instance(g: THREE.Group, name: PropName, list: Xf[]) {
   });
 }
 
+export const kitReady = () => lib.size >= NAMES.length;
+
+/** The road itself, one kit tile per layout piece (see shared/layout.ts). One tile = `tile` metres wide. */
+export function buildKitRoad(tiles: TilePlace[], tile: number): THREE.Group {
+  const g = new THREE.Group();
+  if (!kitReady()) return g;
+  const name = { straight: "roadStraight", large: "roadCornerLarge", larger: "roadCornerLarger" } as const;
+  for (const kind of ["straight", "large", "larger"] as const)
+    instance(
+      g,
+      name[kind],
+      tiles.filter((t) => t.kind === kind).map((t) => ({ x: t.x, z: t.z, rot: t.rot, sx: tile, sy: 1, sz: tile, y: 0.03 })),
+    );
+  return g;
+}
+
 export function buildKitProps(track: Track, night: boolean): THREE.Group {
   const g = new THREE.Group();
-  if (lib.size < NAMES.length) return g;
+  if (!kitReady()) return g;
   const n = track.points.length;
   const hw = track.halfWidth;
   const at = (i: number, lat: number) => trackPoint(track, ((i % n) + n) % n, lat);

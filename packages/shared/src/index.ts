@@ -7,3 +7,4 @@ export * from "./race";
 export * from "./characters";
 export * from "./items";
 export * from "./gamehost";
+export * from "./layout";

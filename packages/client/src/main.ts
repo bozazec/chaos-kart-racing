@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, type Track } from "@kart/shared";
+import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, trackTiles, type Track } from "@kart/shared";
 import { buildItemBox, buildKartMesh, loadKartModel, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
 import { buildScenery } from "./scenery";
-import { buildKitProps, loadProps } from "./props";
+import { buildKitProps, buildKitRoad, kitReady, loadProps } from "./props";
 import { Minimap } from "./minimap";
 import type { Session } from "./session";
 import { HostSession } from "./net/host";
@@ -47,7 +47,8 @@ function applyTrack(id: number) {
   shownTrack = id;
   if (trackGroup) scene.remove(trackGroup);
   for (const m of boxMeshes) scene.remove(m);
-  trackGroup = buildTrackMesh(track, def.theme);
+  trackGroup = buildTrackMesh(track, def.theme, kitReady());
+  if (kitReady()) trackGroup.add(buildKitRoad(trackTiles(id), def.tile));
   trackGroup.add(buildScenery(track, def.scenery, !!def.theme.glow));
   trackGroup.add(buildKitProps(track, !!def.theme.glow));
   scene.add(trackGroup);

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { characterById, type Track, type TrackTheme } from "@kart/shared";
 
-export function buildTrackMesh(track: Track, theme: TrackTheme): THREE.Group {
+export function buildTrackMesh(track: Track, theme: TrackTheme, roadless = false): THREE.Group {
   const g = new THREE.Group();
   const n = track.points.length;
   const hw = track.halfWidth;
@@ -36,8 +36,10 @@ export function buildTrackMesh(track: Track, theme: TrackTheme): THREE.Group {
     return m;
   };
 
-  g.add(ribbon(hw + 1.2, 0.02, theme.kerb, !!theme.glow)); // kerb/border
-  g.add(ribbon(hw, 0.04, theme.road)); // asphalt
+  if (!roadless) {
+    g.add(ribbon(hw + 1.2, 0.02, theme.kerb, !!theme.glow)); // kerb/border
+    g.add(ribbon(hw, 0.04, theme.road)); // asphalt
+  }
 
   // start/finish line
   const p0 = track.points[0]!;
@@ -48,13 +50,13 @@ export function buildTrackMesh(track: Track, theme: TrackTheme): THREE.Group {
   const line = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, 1.5), new THREE.MeshStandardMaterial({ color: 0xffffff }));
   line.rotation.x = -Math.PI / 2; // lay flat; the z spin (applied first, in the plane) then aims the long side across the road
   line.rotation.z = lineHeading;
-  line.position.set(p0.x, 0.06, p0.z);
+  line.position.set(p0.x, 0.09, p0.z);
   g.add(line);
 
   // checkpoint-less centre dashes for orientation
   const dashGeo = new THREE.PlaneGeometry(0.4, 2);
   const dashMat = new THREE.MeshStandardMaterial({ color: 0xf5d442 });
-  for (let i = 0; i < n; i += 2) {
+  for (let i = 0; i < n && !roadless; i += 2) {
     const a = track.points[i]!;
     const b = track.points[(i + 1) % n]!;
     const pr = track.points[(i - 1 + n) % n]!;

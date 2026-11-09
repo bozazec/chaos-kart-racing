@@ -1,4 +1,5 @@
 import type { Vec2 } from "./types";
+import { parseLayout } from "./layout";
 
 export interface Track {
   /** Index into TRACKS (0 for ad-hoc tracks). */
@@ -187,8 +188,10 @@ export interface TrackDef {
   name: string;
   blurb: string;
   scenery: TrackScenery;
-  control: Vec2[];
-  halfWidth: number;
+  /** Kenney road pieces, see layout.ts. The centreline is derived from it. */
+  layout: string;
+  /** metres per tile; the road is exactly one tile wide */
+  tile: number;
   laps: number;
   theme: TrackTheme;
 }
@@ -203,41 +206,53 @@ export const TRACKS: readonly TrackDef[] = [
   {
     id: 0,
     name: "Belgrade",
-    blurb: "Serbia. Short and flowing past Kalemegdan and the Temple of Saint Sava. 3 laps.",
+    blurb: "Serbia. Flowing 1.9 km of Kenney road past Kalemegdan and the Temple of Saint Sava. 3 laps.",
     scenery: "belgrade",
-    control: DEMO_CONTROL,
-    halfWidth: 8,
+    layout: "F3lF4rlF4lF3rF1LF2lF2rF2LF3rF4lF1lF1rF3RlF4lF6LrlF3RF2",
+    tile: 18,
     laps: 3,
     theme: { sky: 0x8fc8ef, fog: 0x8fc8ef, ground: 0x4f8f3c, road: 0x3a3a42, kerb: 0xc6363c },
   },
   {
     id: 1,
     name: "Budapest",
-    blurb: "Hungary. Long and technical along the Danube, Parliament and the Chain Bridge. 3 laps.",
+    blurb: "Hungary. Long and technical 2.7 km along the Danube, Parliament and the Chain Bridge. 2 laps.",
     scenery: "budapest",
-    control: pts([[-160,-80],[-60,-110],[50,-90],[130,-120],[200,-60],[180,10],[110,20],[90,70],[150,120],[110,180],[20,160],[-30,100],[-100,130],[-170,90],[-200,10],[-190,-50]]),
-    halfWidth: 7,
-    laps: 3,
+    layout: "F3rF4lF3rF4LF4lF3RF4lF2lF4rF3rF3lF3RlF2lF4rlF3rLF3RlLF1RF3lF6rF3lF2LrF2lF3",
+    tile: 18,
+    laps: 2,
     theme: { sky: 0xf2c48a, fog: 0xf2c48a, ground: 0x76865a, road: 0x45403f, kerb: 0xe8e0d0 },
   },
   {
     id: 2,
     name: "Skopje",
-    blurb: "North Macedonia. Fast night ring by the Vardar: Stone Bridge, Warrior on a Horse, Millennium Cross. 2 laps.",
+    blurb: "North Macedonia. Fast 2.9 km night ring by the Vardar with wide sweepers: Stone Bridge, Warrior on a Horse, Millennium Cross. 2 laps.",
     scenery: "skopje",
-    control: pts([[-200,-150],[-100,-150],[-50,-185],[10,-150],[100,-150],[200,-170],[280,-100],[290,0],[240,90],[130,120],[60,170],[-60,160],[-140,100],[-200,20],[-240,-70]]),
-    halfWidth: 10,
+    layout: "F4rF4LF1rF3LlRF2LF3LF4rF1LF3rF4RF2LF4LF4RF1lF2LRLRF4LF4lF2RF1LF7",
+    tile: 20,
     laps: 2,
     theme: { sky: 0x0c1024, fog: 0x0c1024, ground: 0x18261f, road: 0x22222c, kerb: 0xffd23f, glow: true },
   },
 ];
+
+/** Tile placements for the renderer. */
+export const trackTiles = (id: number) => {
+  const d = trackDef(id);
+  return parseLayout(d.layout, d.tile).tiles;
+};
 
 export const cleanTrackId = (id: unknown): number => (Number.isInteger(id) && (id as number) >= 0 && (id as number) < TRACKS.length ? (id as number) : 0);
 export const trackDef = (id: number): TrackDef => TRACKS[cleanTrackId(id)]!;
 
 export function buildTrackById(id: number): Track {
   const d = trackDef(id);
-  return buildTrack(d.control, { halfWidth: d.halfWidth, laps: d.laps, id: d.id, name: d.name });
+  return buildTrack(parseLayout(d.layout, d.tile).control, {
+    halfWidth: d.tile / 2,
+    laps: d.laps,
+    id: d.id,
+    name: d.name,
+    boxRows: [0.06, 0.18, 0.31, 0.43, 0.56, 0.68, 0.81, 0.93], // 24 boxes: the tracks are long
+  });
 }
 
 /** Track 0. Kept for older call sites. */

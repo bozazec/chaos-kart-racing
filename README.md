@@ -31,7 +31,9 @@ Phone on the same Wi-Fi: `http://<laptop-ip>:5173` (touch controls appear automa
 - Host leaves = room closes (no host migration). A browser host should keep its tab visible.
 
 ## Tracks
-Three tracks live in `shared/src/track.ts` (`TRACKS`): Belgrade, Budapest, Skopje (night). Each has its own
+Three tracks live in `shared/src/track.ts` (`TRACKS`): Belgrade (1.9 km), Budapest (2.7 km), Skopje (2.9 km, night). Each is
+a string of Kenney road pieces (`layout`, see `shared/src/layout.ts`: `F` straight, `l`/`r` radius-1.5 corner, `L`/`R` radius-2.5
+corner) and a tile size in metres; the physics centreline and the rendered tiles both come from that string. Each has its own
 road width, lap count and theme (sky, ground, road, kerbs). The host picks the track in the lobby and everyone's
 client rebuilds it. Tests check every track is a closed loop that never crosses itself, never turns tighter than the
 road is wide, and can be driven through all laps. Do not edit published control points: all peers must build the

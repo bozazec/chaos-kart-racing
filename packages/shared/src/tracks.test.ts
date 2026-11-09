@@ -11,10 +11,10 @@ describe.each(TRACKS.map((d) => [d.name, d.id] as const))("track %s", (_name, id
   const P = t.points;
   const n = P.length;
 
-  it("has an id, name, 12 item boxes on the road and a spawn on the road", () => {
+  it("has an id, name, 24 item boxes on the road and a spawn on the road", () => {
     expect(t.id).toBe(id);
     expect(t.name).toBe(TRACKS[id]!.name);
-    expect(t.itemBoxes.length).toBe(12);
+    expect(t.itemBoxes.length).toBe(24);
     for (const b of t.itemBoxes) expect(nearestOnTrack(t, b.x, b.z, 0, n).dist).toBeLessThan(t.halfWidth);
     const k = createKart(t, 0);
     expect(nearestOnTrack(t, k.x, k.z, k.segIdx).dist).toBeLessThan(t.halfWidth);
@@ -46,7 +46,7 @@ describe.each(TRACKS.map((d) => [d.name, d.id] as const))("track %s", (_name, id
   it("is drivable: a centerline bot finishes every lap", () => {
     let s = createKart(t);
     let tick = 0;
-    while (!s.finished && tick < 400 * 60) {
+    while (!s.finished && tick < 700 * 60) {
       const tp = P[(s.segIdx + 8) % n]!;
       let err = Math.atan2(tp.x - s.x, tp.z - s.z) - s.heading;
       err = Math.atan2(Math.sin(err), Math.cos(err));
