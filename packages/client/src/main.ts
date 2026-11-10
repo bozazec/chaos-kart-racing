@@ -96,8 +96,18 @@ document.body.appendChild(hud);
 const banner = document.createElement("div");
 banner.style.cssText = "position:fixed;left:0;right:0;bottom:18%;display:none;justify-content:center;color:#fff;font:700 40px system-ui,sans-serif;text-shadow:0 2px 6px #000;text-align:center;white-space:pre;pointer-events:none";
 document.body.appendChild(banner);
+// rear-view mirror: second camera into a scissored strip at the top centre of the screen
+const rearCam = new THREE.PerspectiveCamera(60, 3.4, 0.1, 500);
+const mirrorBox = document.createElement("div");
+mirrorBox.style.cssText = "position:fixed;top:10px;display:none;box-sizing:border-box;border:3px solid rgba(255,255,255,.75);border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;color:rgba(255,255,255,.8);font:700 10px system-ui,sans-serif;letter-spacing:1px;padding:2px 8px";
+mirrorBox.textContent = "REAR";
+document.body.appendChild(mirrorBox);
+const mirrorRect = () => {
+  const w = Math.round(Math.min(340, innerWidth * 0.46));
+  return { w, h: Math.round(w * 0.29), x: Math.round((innerWidth - w) / 2), y: 10 };
+};
 const itemSlot = document.createElement("div");
-itemSlot.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);min-width:84px;height:84px;padding:0 10px;box-sizing:border-box;border-radius:16px;background:rgba(10,16,34,.6);border:2px solid rgba(255,255,255,.4);color:#fff;font:700 13px system-ui,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-shadow:0 1px 3px #000";
+itemSlot.style.cssText = "position:fixed;bottom:62px;left:50%;transform:translateX(-50%);min-width:84px;height:84px;padding:0 10px;box-sizing:border-box;border-radius:16px;background:rgba(10,16,34,.6);border:2px solid rgba(255,255,255,.4);color:#fff;font:700 13px system-ui,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-shadow:0 1px 3px #000";
 document.body.appendChild(itemSlot);
 let itemShown = -1;
 const spSlot = document.createElement("div");
@@ -221,7 +231,12 @@ leaveBtn.addEventListener("click", leave);
 addEventListener("keydown", (e) => {
   if (e.code === "Escape") leave();
   if (e.code === "KeyL") session?.toLobby?.();
+  if (e.code === "ArrowLeft") watchDelta = -1;
+  if (e.code === "ArrowRight") watchDelta = 1;
 });
+// lobby / waiting-for-next-round: left/right arrows switch whose kart the camera follows
+let watchSlot: number | null = null;
+let watchDelta = 0;
 
 // host tab hidden => sim still runs (worker) but rendering/input stop: warn via title
 document.addEventListener("visibilitychange", () => {
@@ -288,7 +303,7 @@ function frame(now: number) {
     const info = new Map(rv.players.map((p) => [p.slot, p]));
     const rendered = session.render(now);
     const present = new Set<number>();
-    let focus = null as { x: number; z: number; heading: number } | null;
+    let focus = null as { x: number; z: number; heading: number; slot?: number } | null;
     let boosting = false;
     const t = now / 1000;
     const wv = session.world(now);
@@ -364,6 +379,20 @@ function frame(now: number) {
         boosting = !!k.boosting;
       }
     }
+    const canWatch = rv.phase === Phase.Lobby || rv.waiting;
+    if (!canWatch) watchSlot = null;
+    else {
+      if (watchDelta && rendered.length > 1) {
+        const slots = rendered.map((k) => k.slot).sort((a, b) => a - b);
+        const i = slots.indexOf(watchSlot ?? session.mySlot);
+        watchSlot = slots[(i + watchDelta + slots.length) % slots.length]!;
+        camInit = false; // cut to the new kart
+      }
+      const w = watchSlot !== null ? rendered.find((k) => k.slot === watchSlot) : undefined;
+      if (w) focus = w;
+      else watchSlot = null;
+    }
+    watchDelta = 0;
     focus ??= rendered[0] ?? null; // spectate while waiting for next round
     for (const [slot, m] of karts) {
       if (!present.has(slot)) {
@@ -392,6 +421,7 @@ function frame(now: number) {
       }
     }
 
+    mirrorFocus = focus;
     for (const km of karts.values()) updateKartLook(km, camera.position);
     roomUI.update(rv, { mySlot: session.mySlot, isHost: session.isHost, code: session.roomCode });
     const h = session.hud();
@@ -432,6 +462,10 @@ function frame(now: number) {
       const pos = rv.phase === Phase.Race || rv.phase === Phase.Results ? `Pos ${mine?.pos || "–"}/${rv.players.filter((p) => !p.waiting).length}\n` : "";
       hud.textContent = `${pos}Lap ${Math.min(st.lap + 1, track.laps)}/${track.laps}\n${(Math.abs(st.speed) * 3.6).toFixed(0)} km/h${st.offTrack ? "  (off track)" : ""}\n${h.raceTime.toFixed(2)} s${st.shield ? `\n🛡 Shield ${Math.ceil(st.shieldT / 60)} s` : ""}\n${h.info}\n${keys}`;
     } else hud.textContent = `${h.info}\n${keys}`;
+    if (canWatch && rendered.length > 1) {
+      const ws = watchSlot ?? session.mySlot;
+      hud.textContent += `\n◀ ▶ watching: ${info.get(ws)?.name ?? "?"}${ws === session.mySlot ? " (you)" : ""}`;
+    }
     // driving against the track for 2 s -> warning
     let backwards = false;
     if (st && !rv.waiting && rv.phase === Phase.Race && !st.finished && st.stunT === 0 && Math.abs(st.speed) > 3) {
@@ -449,6 +483,35 @@ function frame(now: number) {
     } else banner.style.display = "none";
   }
   renderer.render(scene, camera);
+  renderMirror();
+}
+let mirrorFocus: { x: number; z: number; heading: number; slot?: number } | null = null;
+function renderMirror() {
+  const f = session ? mirrorFocus : null;
+  const r = mirrorRect();
+  if (!f) {
+    mirrorBox.style.display = "none";
+    return;
+  }
+  Object.assign(mirrorBox.style, { display: "block", left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+  const fx = Math.sin(f.heading);
+  const fz = Math.cos(f.heading);
+  rearCam.position.set(f.x + fx * 0.8, 2.1, f.z + fz * 0.8);
+  rearCam.lookAt(f.x - fx * 30, 1.4, f.z - fz * 30);
+  rearCam.aspect = r.w / r.h;
+  rearCam.updateProjectionMatrix();
+  const own = karts.get(f.slot ?? session!.mySlot); // the kart the camera follows: don't film its insides
+  if (own) own.visible = false;
+  renderer.autoClear = false;
+  renderer.setScissorTest(true);
+  renderer.setViewport(r.x, innerHeight - r.y - r.h, r.w, r.h);
+  renderer.setScissor(r.x, innerHeight - r.y - r.h, r.w, r.h);
+  renderer.clear();
+  renderer.render(scene, rearCam);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, innerWidth, innerHeight);
+  renderer.autoClear = true;
+  if (own) own.visible = true;
 }
 requestAnimationFrame(frame);
 
