@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildTrack, CHARACTERS, createKart, DEMO_CONTROL, ItemWorld, Item, nearestOnTrack, paramsFor, stepKart, TICK_DT,
+  buildTrack, CHARACTERS, createKart, DEMO_CONTROL, ItemWorld, Item, OBJ_DRONE, DRONE_RANGE, DRONE_TTL, nearestOnTrack, paramsFor, stepKart, TICK_DT,
   CONF_TICKS, SLOW_TICKS, SPECIAL_CD, SPECIAL_START, type KartHolder, type KartState,
 } from "./index";
 
@@ -53,9 +53,8 @@ describe("self-part of specials (predicted in the sim)", () => {
     expect(s.confT).toBe(0);
     expect(s.slowT).toBe(0);
   });
-  it("Aid Package shields", () => expect(fire(9).shield).toBe(true));
   it("host-only specials have no self effect", () => {
-    for (const id of [0, 2, 3, 5, 6, 8, 10, 11]) {
+    for (const id of [0, 2, 3, 5, 6, 8, 9, 10, 11]) {
       const s = fire(id);
       expect(s.spCd).toBe(SPECIAL_CD);
       expect(s.shield || s.boostT > 0).toBe(false);
@@ -92,24 +91,48 @@ describe("castSpecial (host)", () => {
     expect(b!.cur.confT).toBe(CONF_TICKS);
     expect(c!.cur.confT).toBe(0);
   });
-  it("Rocket Salvo fires 3 missiles in 3 lanes and they hit", () => {
+  it("Rocket Salvo fires 3 parallel straight missiles", () => {
     const w = world();
     const c = onTrack(1, 100);
-    const victims = [onTrack(2, 112), onTrack(3, 112, {})];
-    w.castSpecial(2, c, [c, ...victims], [2, 3, 1], fixedRng);
-    expect(w.objs.filter((o) => o.type === Item.Missile).length).toBe(3);
-    expect(new Set(w.objs.map((o) => Math.round(o.lat))).size).toBe(3);
+    w.castSpecial(2, c, [c], [1], fixedRng);
+    const ms = w.objs.filter((o) => o.type === Item.Missile);
+    expect(ms.length).toBe(3);
+    expect(new Set(ms.map((o) => `${o.dx.toFixed(3)},${o.dz.toFixed(3)}`)).size).toBe(1);
+    expect(new Set(ms.map((o) => `${o.x.toFixed(1)},${o.z.toFixed(1)}`)).size).toBe(3);
   });
-  it("Ice Wall drops 3 slicks behind", () => {
+  it("Shahed Drone (Putin and Zelensky) homes in on the kart ahead and hits it", () => {
+    for (const id of [3, 9]) {
+      const w = world();
+      const c = onTrack(1, 100);
+      const ahead = onTrack(2, 130, { speed: 30 });
+      const behind = onTrack(3, 80);
+      w.castSpecial(id, c, [c, ahead, behind], [2, 1, 3], fixedRng);
+      expect(w.objs.length).toBe(1);
+      expect(w.objs[0]!.type).toBe(OBJ_DRONE);
+      expect(w.objs[0]!.target).toBe(2);
+      for (let i = 0; i < 300 && ahead.cur.stunT === 0; i++) w.step([c, ahead, behind], () => 0, TICK_DT);
+      expect(ahead.cur.stunT).toBeGreaterThan(0);
+      expect(behind.cur.stunT).toBe(0);
+      expect(c.cur.stunT).toBe(0);
+      expect(w.objs.length).toBe(0);
+    }
+  });
+  it("Shahed Drone ignores walls and flies along the track when nobody is ahead", () => {
     const w = world();
     const c = onTrack(1, 100);
     w.castSpecial(3, c, [c], [1], fixedRng);
-    expect(w.objs.length).toBe(3);
-    for (const o of w.objs) {
-      expect(o.type).toBe(Item.Oil);
-      const hit = nearestOnTrack(track, o.x, o.z, 100, 20);
-      expect(hit.idx).toBeLessThanOrEqual(100);
-    }
+    expect(w.objs[0]!.target).toBe(-1);
+    for (let i = 0; i < 60; i++) w.step([c], () => 0, TICK_DT);
+    expect(w.objs.length).toBe(1);
+    expect(nearestOnTrack(track, w.objs[0]!.x, w.objs[0]!.z, 100, 60).idx).toBeGreaterThan(100);
+  });
+  it("Shahed Drone has limited range: it vanishes instead of circling the track", () => {
+    const w = world();
+    const c = onTrack(1, 100);
+    w.castSpecial(3, c, [c], [1], fixedRng);
+    for (let i = 0; i < DRONE_TTL + 2; i++) w.step([], () => 0, TICK_DT);
+    expect(w.objs.length).toBe(0);
+    expect(DRONE_RANGE).toBeLessThan(track.points.length * track.spacing / 2);
   });
   it("Bass Drop only spins out rivals within 18 m", () => {
     const c = onTrack(1, 100);
@@ -135,11 +158,6 @@ describe("castSpecial (host)", () => {
     w.castSpecial(8, c, [c], [1], fixedRng);
     expect(w.objs.length).toBe(4);
     for (const o of w.objs) expect(nearestOnTrack(track, o.x, o.z, 100, 30).idx).toBeGreaterThan(100);
-  });
-  it("Aid Package gives the caster an item", () => {
-    const c = onTrack(1, 100);
-    world().castSpecial(9, c, [c], [1], fixedRng);
-    expect(c.cur.item).not.toBe(Item.None);
   });
   it("Lag Spike slows rivals in 35 m", () => {
     const c = onTrack(1, 100);

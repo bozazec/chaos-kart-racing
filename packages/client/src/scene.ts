@@ -412,6 +412,45 @@ export function buildMissile(): THREE.Group {
   return g;
 }
 
+/** Shahed-136 style loitering drone: slim fuselage, big delta wing with tip fins, pusher prop at the back. Faces +z. */
+export function buildDrone(): THREE.Group {
+  const g = new THREE.Group();
+  const grey = new THREE.MeshStandardMaterial({ color: 0xcfd3c4, roughness: 0.6 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3a3f36, roughness: 0.7 });
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 3.2, 10), grey);
+  fus.rotation.x = Math.PI / 2;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 10), grey);
+  nose.rotation.x = Math.PI / 2;
+  nose.position.z = 2.05;
+  // delta wing: apex forward, wide at the back
+  const wg = new THREE.BufferGeometry();
+  wg.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 1.4, -1.7, 0, -1.5, 1.7, 0, -1.5], 3));
+  wg.computeVertexNormals();
+  const wing = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ color: 0xd9dccf, side: THREE.DoubleSide, roughness: 0.6 }));
+  wing.position.y = 0.02;
+  g.add(fus, nose, wing);
+  for (const x of [-1.7, 1.7]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.7), dark);
+    fin.position.set(x, 0.3, -1.4);
+    g.add(fin);
+  }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.3, 8), dark);
+  hub.rotation.x = Math.PI / 2;
+  hub.position.z = -1.75;
+  const prop = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 0.1), dark);
+  prop.position.z = -1.92;
+  g.add(hub, prop);
+  g.userData.prop = prop;
+  return g;
+}
+
+/** Short orange fireball where a missile/drone blew up. Remove it when `update` returns false. */
+export function buildExplosion(): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.9, depthWrite: false }));
+  m.userData.age = 0;
+  return m;
+}
+
 export function buildOil(): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CircleGeometry(2, 20), new THREE.MeshStandardMaterial({ color: 0x0a0a10, roughness: 0.15, metalness: 0.6 }));
   m.rotation.x = -Math.PI / 2;

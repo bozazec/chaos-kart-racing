@@ -131,10 +131,6 @@ export function stepKart(
         shield = true;
         shieldT = SHIELD_TICKS;
         break;
-      case 9: // Aid Package (free item is added by the host)
-        shield = true;
-        shieldT = SHIELD_TICKS;
-        break;
     }
   }
   // the shield runs out after 10 s even if nothing hit it

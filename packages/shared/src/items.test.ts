@@ -116,18 +116,39 @@ describe("item use in sim", () => {
 });
 
 describe("missiles and oil", () => {
-  it("missile follows the track and hits a kart ahead of the shooter", () => {
+  it("missile flies straight and hits a kart in front of the shooter", () => {
     const w = new ItemWorld(track);
     const shooter = onTrack(1, 40, { item: Item.Missile });
-    const victim = onTrack(2, 60);
     const used = stepKart(shooter.cur, { ...idle, useItem: true }, track);
     expect(used.item).toBe(Item.None);
+    const h = shooter.cur.heading;
+    const victim = kartAt(2, shooter.cur.x + Math.sin(h) * 25, shooter.cur.z + Math.cos(h) * 25);
     w.spawnFrom(Item.Missile, 1, shooter.cur);
     expect(w.objs.length).toBe(1);
     for (let i = 0; i < 120 && victim.cur.stunT === 0; i++) w.step([shooter, victim], () => 0, TICK_DT);
     expect(victim.cur.stunT).toBeGreaterThan(0);
     expect(shooter.cur.stunT).toBe(0);
     expect(w.objs.length).toBe(0);
+  });
+  it("missile explodes on the track wall instead of following the bend", () => {
+    const w = new ItemWorld(track);
+    // aim straight across the track edge
+    const k = onTrack(1, 40);
+    k.cur = { ...k.cur, heading: k.cur.heading + Math.PI / 2 };
+    w.spawnFrom(Item.Missile, 1, k.cur);
+    const m = w.objs[0]!;
+    const dirx = m.dx;
+    const dirz = m.dz;
+    let steps = 0;
+    while (w.objs.length && steps++ < 200) {
+      w.step([], () => 0, TICK_DT);
+      if (w.objs[0]) {
+        expect(w.objs[0].dx).toBe(dirx); // never steers
+        expect(w.objs[0].dz).toBe(dirz);
+      }
+    }
+    expect(w.objs.length).toBe(0);
+    expect(steps).toBeLessThan(40); // gone long before the ttl
   });
   it("missile expires if nothing is hit", () => {
     const w = new ItemWorld(track);
@@ -149,8 +170,10 @@ describe("missiles and oil", () => {
   });
   it("shield eats a missile", () => {
     const w = new ItemWorld(track);
-    const victim = onTrack(2, 60, { shield: true });
-    w.spawnFrom(Item.Missile, 1, onTrack(1, 40).cur);
+    const shooter = onTrack(1, 40);
+    const h = shooter.cur.heading;
+    const victim = kartAt(2, shooter.cur.x + Math.sin(h) * 25, shooter.cur.z + Math.cos(h) * 25, { shield: true });
+    w.spawnFrom(Item.Missile, 1, shooter.cur);
     for (let i = 0; i < 120 && w.objs.length; i++) w.step([victim], () => 0, TICK_DT);
     expect(victim.cur.shield).toBe(false);
     expect(victim.cur.stunT).toBe(0);

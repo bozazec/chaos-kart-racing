@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, trackTiles, type Track } from "@kart/shared";
-import { buildItemBox, buildKartMesh, loadKartModel, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
+import { buildItemBox, buildKartMesh, loadKartModel, buildDrone, buildExplosion, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
 import { buildScenery } from "./scenery";
 import { buildKitProps, buildKitRoad, kitReady, loadProps } from "./props";
 import { Minimap } from "./minimap";
@@ -69,7 +69,9 @@ function applyTrack(id: number) {
   camInit = false; // don't swoop the camera across the map
 }
 const objMeshes = new Map<number, THREE.Object3D>();
-const objLast = new Map<number, { x: number; z: number }>();
+const objLast = new Map<number, { x: number; z: number; type: number; y: number }>();
+const blasts: THREE.Mesh[] = [];
+const DRONE_Y = 6.5; // about 5 car heights above the track
 
 const karts = new Map<number, THREE.Group>();
 const kartChar = new Map<number, number>();
@@ -300,20 +302,43 @@ function frame(now: number) {
       seen.add(o.id);
       let m = objMeshes.get(o.id);
       if (!m) {
-        m = o.type === 3 ? buildMissile() : buildOil();
+        m = o.type === 3 ? buildMissile() : o.type === 5 ? buildDrone() : buildOil();
         scene.add(m);
         objMeshes.set(o.id, m);
       }
       m.position.x = o.x;
       m.position.z = o.z;
       const last = objLast.get(o.id);
-      if (o.type === 3 && last && (o.x !== last.x || o.z !== last.z)) m.rotation.y = Math.atan2(o.x - last.x, o.z - last.z);
-      objLast.set(o.id, { x: o.x, z: o.z });
+      if ((o.type === 3 || o.type === 5) && last && (o.x !== last.x || o.z !== last.z)) m.rotation.y = Math.atan2(o.x - last.x, o.z - last.z);
+      if (o.type === 5) {
+        m.position.y = DRONE_Y;
+        const prop = m.userData.prop as THREE.Object3D | undefined;
+        if (prop) prop.rotation.z += 1.5;
+      }
+      objLast.set(o.id, { x: o.x, z: o.z, type: o.type, y: o.type === 5 ? DRONE_Y : 0.9 });
+    }
+    for (let i = blasts.length - 1; i >= 0; i--) {
+      const b = blasts[i]!;
+      const a = (b.userData.age += dt);
+      b.scale.setScalar(0.6 + a * 9);
+      (b.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 - a * 2.2);
+      if (a > 0.4) {
+        scene.remove(b);
+        blasts.splice(i, 1);
+      }
     }
     for (const [id, m] of objMeshes) {
       if (!seen.has(id)) {
         scene.remove(m);
         objMeshes.delete(id);
+        const gone = objLast.get(id);
+        if (gone && (gone.type === 3 || gone.type === 5)) {
+          // missile/drone is gone: it hit something
+          const b = buildExplosion();
+          b.position.set(gone.x, gone.type === 5 ? 1.5 : gone.y, gone.z);
+          scene.add(b);
+          blasts.push(b);
+        }
         objLast.delete(id);
       }
     }
