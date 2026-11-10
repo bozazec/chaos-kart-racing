@@ -9,6 +9,7 @@ import { HostSession } from "./net/host";
 import { ClientSession } from "./net/client";
 import { requestReset } from "./input";
 import { isTouchDevice, setTouchControlsVisible, setTouchItem, setTouchSpecial } from "./touch";
+import { getCustomHead } from "./customhead";
 import { askName, createHome, createRoomUI, injectStyles, ITEM_INFO, safeGet, safeSet } from "./ui";
 
 let track: Track = buildTrackById(0);
@@ -72,11 +73,14 @@ const objLast = new Map<number, { x: number; z: number }>();
 
 const karts = new Map<number, THREE.Group>();
 const kartChar = new Map<number, number>();
+const kartHead = new Map<number, string | null>(); // custom head image each built kart uses (own kart only)
 const plates = new Map<number, { key: string; sprite: THREE.Sprite }>();
 function kartFor(slot: number) {
   let m = karts.get(slot);
   if (!m) {
-    m = buildKartMesh(kartChar.get(slot) ?? 0);
+    const head = slot === session?.mySlot ? getCustomHead() : null;
+    kartHead.set(slot, head);
+    m = buildKartMesh(kartChar.get(slot) ?? 0, head);
     scene.add(m);
     karts.set(slot, m);
   }
@@ -268,7 +272,8 @@ function frame(now: number) {
     const rv = session.room();
     // character changed (lobby switch / new player): rebuild that kart in the new style
     for (const p of rv.players) {
-      if (kartChar.get(p.slot) !== p.character) {
+      const wantHead = p.slot === session.mySlot ? getCustomHead() : null;
+      if (kartChar.get(p.slot) !== p.character || (karts.has(p.slot) && kartHead.get(p.slot) !== wantHead)) {
         kartChar.set(p.slot, p.character);
         const km = karts.get(p.slot);
         if (km) {

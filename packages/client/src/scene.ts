@@ -119,8 +119,8 @@ const HEAD_ZOOM = 0.9; // < 1 zooms the art in so the head outline reaches the e
  * One texture for the whole head ball: left half = face, right half = back of head (roster art), over a skin/hair
  * fill that shows at the sides. Vertex UVs project each half straight along z (see build3DKart).
  */
-function headTexture(id: number): THREE.CanvasTexture {
-  let t = headTex.get(id);
+function headTexture(id: number, custom?: string | null): THREE.CanvasTexture {
+  let t = custom ? undefined : headTex.get(id);
   if (t) return t;
   const { skin, hair } = characterById(id).kart;
   const css = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
@@ -138,6 +138,17 @@ function headTexture(id: number): THREE.CanvasTexture {
   t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
+  if (custom) {
+    // player's own photo: same image on the front and the back half
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, 256, 256);
+      ctx.drawImage(img, 256, 0, 256, 256);
+      t!.needsUpdate = true;
+    };
+    img.src = custom;
+    return t;
+  }
   headTex.set(id, t);
   (["f", "b"] as const).forEach((v, i) => {
     const img = new Image();
@@ -150,7 +161,7 @@ function headTexture(id: number): THREE.CanvasTexture {
   return t;
 }
 
-function headBall(id: number): THREE.Mesh {
+function headBall(id: number, custom?: string | null): THREE.Mesh {
   const R = 0.46;
   const geo = new THREE.SphereGeometry(R, 32, 24);
   const pos = geo.attributes.position!;
@@ -161,12 +172,12 @@ function headBall(id: number): THREE.Mesh {
     const v = pos.getY(i) / R;
     uv.setXY(i, ((u * HEAD_ZOOM * 0.5 + 0.5) * 0.5) + (front ? 0 : 0.5), v * HEAD_ZOOM * 0.5 + 0.5);
   }
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: headTexture(id), roughness: 0.8, metalness: 0 }));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: headTexture(id, custom), roughness: 0.8, metalness: 0 }));
   m.position.y = 0.98;
   return m;
 }
 
-function build3DKart(g: THREE.Group, characterId: number) {
+function build3DKart(g: THREE.Group, characterId: number, customHead?: string | null) {
   const { body: bodyC, accent, trim, skin, hair, metal } = characterById(characterId).kart;
   const car = kartModel!.clone(true);
   const mats = new Map<string, THREE.Material>();
@@ -196,7 +207,7 @@ function build3DKart(g: THREE.Group, characterId: number) {
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.3, 4, 10), mat(trim));
   torso.position.y = 0.3;
   // head ball wrapped in the roster art: face on the front half, back of the head on the back half
-  d.add(torso, headBall(characterId));
+  d.add(torso, headBall(characterId, customHead));
   for (const sx of [-0.17, 0.17]) {
     const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.4, 3, 8), mat(trim));
     arm.position.set(sx * 2.1, 0.32, 0.3);
@@ -216,10 +227,10 @@ const HALF_L = 1.15; // proxy kart half length: standees stand just outside both
  *  - a lean 3D proxy (body, big wheels, torso, head in skin/hair colors) that shows through at the sides, where
  *    the standees are edge-on and fade out. See updateKartLook().
  */
-export function buildKartMesh(characterId: number): THREE.Group {
+export function buildKartMesh(characterId: number, customHead?: string | null): THREE.Group {
   const g = new THREE.Group();
   const { body: bodyC, trim, skin, hair, metal } = characterById(characterId).kart;
-  if (kartModel) build3DKart(g, characterId);
+  if (kartModel) build3DKart(g, characterId, customHead);
   else {
     // proxy kart (hidden while a standee is facing the camera)
     const proxy = new THREE.Group();

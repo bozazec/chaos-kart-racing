@@ -1,3 +1,4 @@
+import { captureHead, getCustomHead, onCustomHeadChange, saveHeadFromFile, setCustomHead } from "./customhead";
 import { buildTrackById, characterById, CHARACTERS, DEFAULT_PARAMS, MAX_PLAYERS, paramsFor, Phase, SPECIAL_CD, STUN_TICKS, trackDef, TRACKS, type PlayerInfo, type RoomInfo } from "@kart/shared";
 import { trackPreviewUrl } from "./minimap";
 import { ROOMS_URL } from "./net/signaling";
@@ -74,9 +75,12 @@ export function injectStyles() {
 .k-char img{width:100%;height:100%;object-fit:cover;display:block}
 .k-char.sel{border-color:#ffd23f;box-shadow:0 0 16px rgba(255,210,63,.85)}
 .k-pick{display:flex;gap:16px;align-items:flex-start}
-.k-pick .k-chars{flex:1;min-width:0}
+.k-me{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.k-me .k-in{flex:1;min-width:140px}
+.k-dt{margin-top:14px;font-weight:700;font-size:14px}
 @media(max-width:760px){.k-pick{flex-direction:column}.k-detail{width:100%!important}}
 .k-detail{width:270px;flex:none;box-sizing:border-box;background:rgba(0,0,0,.28);border-radius:12px;padding:12px}
+.k-hp{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #ffd23f;flex:none}
 .k-dh{display:flex;gap:10px;align-items:center;margin-bottom:10px}
 .k-dh img{width:72px;height:72px;border-radius:12px;object-fit:cover;object-position:50% 60%;border:3px solid #fff;flex:none}
 .k-dn{font-size:20px;font-weight:800;line-height:1.1}
@@ -243,6 +247,40 @@ export function createHome(a: HomeActions) {
     if (v) name.value = v;
     return v;
   };
+  // custom driver photo (own kart's head, front and back; stored locally)
+  const headPrev = h("img", { class: "k-hp", alt: "Your photo" });
+  const headMsg = h("div", { class: "k-muted", style: "font-size:12px;margin-top:6px" });
+  const fileIn = h("input", { type: "file", accept: "image/*", style: "display:none" });
+  const camIn = h("input", { type: "file", accept: "image/*", style: "display:none" });
+  camIn.setAttribute("capture", "user"); // phones open the selfie camera
+  const upBtn = h("button", { class: "k-btn sec", textContent: "Upload" });
+  const camBtn = h("button", { class: "k-btn sec", textContent: "Camera" });
+  const clrBtn = h("button", { class: "k-btn sec", textContent: "Remove" });
+  const syncHead = () => {
+    const c = getCustomHead();
+    headPrev.style.display = c ? "block" : "none";
+    if (c) headPrev.src = c;
+    clrBtn.style.display = c ? "" : "none";
+    headMsg.textContent = c ? "Your photo is the driver's face (front and back). Saved on this device." : "Optional: use your own face as the driver.";
+  };
+  onCustomHeadChange(syncHead);
+  syncHead();
+  const fromFile = async (inp: HTMLInputElement) => {
+    const f = inp.files?.[0];
+    inp.value = "";
+    if (!f) return;
+    try {
+      await saveHeadFromFile(f);
+    } catch {
+      headMsg.textContent = "Couldn't read that image.";
+    }
+  };
+  fileIn.onchange = () => void fromFile(fileIn);
+  camIn.onchange = () => void fromFile(camIn);
+  upBtn.onclick = () => fileIn.click();
+  camBtn.onclick = () => void captureHead(() => camIn.click());
+  clrBtn.onclick = () => setCustomHead(null);
+
   const create = h("button", { class: "k-btn", textContent: "Create room" });
   create.onclick = async () => {
     const n = await needName();
@@ -297,7 +335,7 @@ export function createHome(a: HomeActions) {
     { class: "k-screen" },
     h("img", { class: "k-logo", src: "/art/logo.png", alt: "Global Chaos Kart" }),
     h("div", { class: "k-sub", textContent: "Browser kart racing · up to 8 players · rooms are hosted by players" }),
-    h("div", { class: "k-card", style: "width:100%;max-width:1000px;margin-bottom:16px;box-sizing:border-box" }, h("h3", { textContent: "Choose your driver" }), h("div", { class: "k-pick" }, chars, detail)),
+    h("div", { class: "k-card", style: "width:100%;max-width:1000px;margin-bottom:16px;box-sizing:border-box" }, h("h3", { textContent: "Choose your driver" }), h("div", { class: "k-pick" }, h("div", { style: "flex:1;min-width:0" }, chars, h("div", { class: "k-me" }, name), h("div", { class: "k-dt", textContent: "Custom driver image" }), h("div", { class: "k-me", style: "margin-top:6px" }, headPrev, upBtn, camBtn, clrBtn, fileIn, camIn), headMsg), detail)),
     h(
       "div",
       { class: "k-grid" },
@@ -314,7 +352,7 @@ export function createHome(a: HomeActions) {
       h(
         "div",
         { style: "display:flex;flex-direction:column;gap:16px" },
-        h("div", { class: "k-card" }, h("h3", { textContent: "Play" }), h("div", { class: "k-row" }, name), h("div", { class: "k-row" }, roomName), h("div", { class: "k-row" }, create, solo)),
+        h("div", { class: "k-card" }, h("h3", { textContent: "Play" }), h("div", { class: "k-row" }, roomName), h("div", { class: "k-row" }, create, solo)),
         h(
           "div",
           { class: "k-card k-help" },
