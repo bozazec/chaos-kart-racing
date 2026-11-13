@@ -79,7 +79,7 @@ export function buildKitRoad(tiles: TilePlace[], tile: number): THREE.Group {
   return g;
 }
 
-export function buildKitProps(track: Track, night: boolean): THREE.Group {
+export function buildKitProps(track: Track, night: boolean, startSign?: string): THREE.Group {
   const g = new THREE.Group();
   if (!kitReady()) return g;
   const n = track.points.length;
@@ -110,6 +110,12 @@ export function buildKitProps(track: Track, night: boolean): THREE.Group {
   // start / finish: gantry over the line, checkered flags, grandstands and garages beside it
   const p0 = at(0, 0);
   instance(g, "overheadLights", [{ x: p0.x, z: p0.z, rot: heading(0), sx: (hw * 2 + 4) / 1.26, sy: 8 }]);
+  if (startSign) {
+    // the top beam of the gantry (model units: y 0.50..0.69, z -0.095..0.066 around the recentred origin)
+    const sx = (hw * 2 + 4) / 1.26;
+    const sy = 8;
+    g.add(startBanner(startSign, 0.6 * sy, 0.066 * sx, -0.095 * sx, 0.18 * sy, p0.x, p0.z, heading(0), night));
+  }
   instance(
     g,
     "flagCheckers",
@@ -159,4 +165,39 @@ export function buildKitProps(track: Track, night: boolean): THREE.Group {
   instance(g, "lightPostLarge", posts);
   void tmpE;
   return g;
+}
+
+/** Lettering on the gantry's top beam, front and back face (readable from both sides). */
+function startBanner(text: string, y: number, zFront: number, zBack: number, h: number, x: number, z: number, rot: number, night: boolean): THREE.Group {
+  const cv = document.createElement("canvas");
+  cv.width = 1024;
+  cv.height = 112;
+  const ctx = cv.getContext("2d")!;
+  ctx.fillStyle = "#b3202a";
+  ctx.fillRect(0, 0, 1024, 112);
+  ctx.strokeStyle = "#f4d03f";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(4, 4, 1016, 104);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let size = 92;
+  ctx.font = `800 ${size}px system-ui, "Segoe UI", sans-serif`;
+  while (ctx.measureText(text).width > 960 && size > 30) ctx.font = `800 ${(size -= 4)}px system-ui, "Segoe UI", sans-serif`;
+  ctx.fillText(text, 512, 60);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const w = h * (1024 / 112);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: night ? 0xcccccc : 0xffffff });
+  const grp = new THREE.Group();
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  front.position.set(0, y, zFront + 0.05);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  back.rotation.y = Math.PI;
+  back.position.set(0, y, zBack - 0.05);
+  grp.add(front, back);
+  grp.position.set(x, 0, z);
+  grp.rotation.y = rot;
+  return grp;
 }

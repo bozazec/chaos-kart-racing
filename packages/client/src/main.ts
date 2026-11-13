@@ -52,7 +52,7 @@ function applyTrack(id: number) {
   trackGroup = buildTrackMesh(track, def.theme, kitReady());
   if (kitReady()) trackGroup.add(buildKitRoad(trackTiles(id), def.tile));
   trackGroup.add(buildScenery(track, def.scenery, !!def.theme.glow));
-  trackGroup.add(buildKitProps(track, !!def.theme.glow));
+  trackGroup.add(buildKitProps(track, !!def.theme.glow, def.startSign));
   scene.add(trackGroup);
   boxMeshes = track.itemBoxes.map((b) => {
     const m = buildItemBox();

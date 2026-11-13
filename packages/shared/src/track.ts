@@ -181,7 +181,7 @@ export interface TrackTheme {
 }
 
 /** Which city's landmarks/scenery the client dresses the track with (visual only, never touches the sim). */
-export type TrackScenery = "belgrade" | "budapest" | "skopje";
+export type TrackScenery = "belgrade" | "budapest" | "skopje" | "nis";
 
 export interface TrackDef {
   id: number;
@@ -194,6 +194,8 @@ export interface TrackDef {
   tile: number;
   laps: number;
   theme: TrackTheme;
+  /** Text on a banner over the start gantry. */
+  startSign?: string;
 }
 
 const pts = (a: [number, number][]): Vec2[] => a.map(([x, z]) => ({ x, z }));
@@ -232,6 +234,17 @@ export const TRACKS: readonly TrackDef[] = [
     tile: 20,
     laps: 2,
     theme: { sky: 0x0c1024, fog: 0x0c1024, ground: 0x18261f, road: 0x22222c, kerb: 0xffd23f, glow: true },
+  },
+  {
+    id: 3,
+    name: "Niš",
+    blurb: "Serbia. Flowing 1.8 km through the old Roman city on the Nišava: the Niš Fortress, the Bubanj Heroes monument (three fists) and the Skull Tower (Ćele kula). 3 laps.",
+    scenery: "nis",
+    layout: "F5rlF3lrF4RlF4lRrF8RF13rlLRrF5lF2rlrr",
+    tile: 18,
+    laps: 3,
+    theme: { sky: 0xa9d2ea, fog: 0xa9d2ea, ground: 0x6a8f45, road: 0x3c3b42, kerb: 0xd9d2c0 },
+    startSign: "Idemo Niiiš!",
   },
 ];
 
