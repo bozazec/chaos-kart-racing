@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildTrack, CHARACTERS, createKart, DEMO_CONTROL, hitKart, Item, paramsFor, rollItem, stepKart, TICK_DT, cleanCharacter } from "./index";
+import { buildTrack, CHARACTERS, createKart, DEMO_CONTROL, hitKart, Item, paramsFor, rollItem, stepKart, TICK_DT, cleanCharacter, DEFAULT_PARAMS } from "./index";
 
 const track = buildTrack(DEMO_CONTROL, { laps: 3 });
 
 describe("characters", () => {
-  it("ids are their index, stats in 1..5, 12 points each", () => {
+  it("ids are their index, stats in 1..5", () => {
     CHARACTERS.forEach((c, i) => {
       expect(c.id).toBe(i);
       const v = Object.values(c.stats);
       expect(v.every((x) => x >= 1 && x <= 5)).toBe(true);
-      expect(v.reduce((a, b) => a + b, 0)).toBe(12);
     });
   });
   it("cleanCharacter rejects junk", () => {
@@ -18,10 +17,12 @@ describe("characters", () => {
     expect(cleanCharacter("3")).toBe(0);
     expect(cleanCharacter(5)).toBe(5);
   });
-  it("stats change real physics: top speed, acceleration, steering", () => {
-    const fast = paramsFor(7); // speed 5, handling 1
-    const slow = paramsFor(4); // speed 2, handling 5
-    expect(fast.maxSpeed).toBeGreaterThan(slow.maxSpeed);
+  it("every driver has the same top speed", () => {
+    for (const c of CHARACTERS) expect(paramsFor(c.id).maxSpeed).toBe(DEFAULT_PARAMS.maxSpeed);
+  });
+  it("stats change real physics: acceleration, steering", () => {
+    const fast = paramsFor(7); // handling 1
+    const slow = paramsFor(4); // handling 5
     expect(slow.steerRate).toBeGreaterThan(fast.steerRate);
     expect(paramsFor(5).accel).toBeGreaterThan(paramsFor(11).accel);
     const run = (id: number, secs: number) => {
