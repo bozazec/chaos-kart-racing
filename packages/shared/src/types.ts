@@ -50,8 +50,8 @@ export interface KartState {
 
 export const MAX_PLAYERS = 8;
 
-export const Item = { None: 0, Boost: 1, Shield: 2, Missile: 3, Oil: 4 } as const;
-export const ITEM_COUNT = 5;
+export const Item = { None: 0, Boost: 1, Shield: 2, Missile: 3, Oil: 4, Drone: 5 } as const;
+export const ITEM_COUNT = 6;
 export const BOOST_TICKS = 120;
 export const STUN_TICKS = 70;
 export const ITEM_COOLDOWN = 20;

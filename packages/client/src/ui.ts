@@ -43,6 +43,7 @@ export const ITEM_INFO: Record<number, { icon: string; name: string }> = {
   2: { icon: "🛡️", name: "Shield" },
   3: { icon: "🚀", name: "Missile" },
   4: { icon: "🛢️", name: "Oil slick" },
+  5: { icon: "🛩️", name: "Shahed drone" },
 };
 
 export const safeGet = (k: string) => {

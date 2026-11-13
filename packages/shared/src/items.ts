@@ -48,6 +48,7 @@ export function rollItem(rankFrac: number, rng: () => number = Math.random, bias
     [Item.Shield, lerp(25, 10) * (bias[1] ?? 1)],
     [Item.Missile, lerp(15, 45) * (bias[2] ?? 1)],
     [Item.Oil, lerp(40, 5) * (bias[3] ?? 1)],
+    [Item.Drone, lerp(3, 22) * (bias[4] ?? 1)], // homing: useless for the leader, so back-markers get it
   ];
   const total = weights.reduce((a, [, w]) => a + w, 0);
   let r = rng() * total;
@@ -92,12 +93,21 @@ export class ItemWorld {
   }
 
   /** Create the world object for a used missile/oil item. */
-  spawnFrom(item: number, owner: number, k: KartState) {
+  spawnFrom(item: number, owner: number, k: KartState, target = -1) {
     if (item === Item.Missile) {
       this.spawnMissile(owner, k.x, k.z, k.heading, 0, k.segIdx);
     } else if (item === Item.Oil) {
       this.spawnOil(owner, k.x - Math.sin(k.heading) * 2.8, k.z - Math.cos(k.heading) * 2.8);
+    } else if (item === Item.Drone) {
+      this.spawnDrone(owner, k, target);
     }
+  }
+
+  /** Slot of the unfinished kart ranked just ahead of `slot` (order = slots first..last), or -1 for the leader. */
+  targetAhead(slot: number, karts: KartHolder[], order: number[]): number {
+    const i = order.indexOf(slot);
+    const t = i > 0 ? karts.find((k) => k.slot === order[i - 1] && !k.cur.finished) : undefined;
+    return t ? t.slot : -1;
   }
 
   /** Straight-line missile fired from (x, z) along `heading`, `side` metres to the right of the shooter. */
@@ -142,9 +152,7 @@ export class ItemWorld {
       case 3: // Shahed Drone (Putin)
       case 9: {
         // Shahed Drone (Zelensky): homes in on the kart just ahead of the caster
-        const i = order.indexOf(caster.slot);
-        const target = i > 0 ? karts.find((k) => k.slot === order[i - 1] && !k.cur.finished) : undefined;
-        this.spawnDrone(caster.slot, c, target ? target.slot : -1);
+        this.spawnDrone(caster.slot, c, this.targetAhead(caster.slot, karts, order));
         break;
       }
       case 5: // Bass Drop: shockwave

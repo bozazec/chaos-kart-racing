@@ -7,8 +7,8 @@ export interface CharStats {
   toughness: number; // shorter spin-out, keeps more speed after a hit
 }
 
-/** Item roll multipliers [boost, shield, missile, oil]. */
-export type ItemBias = readonly [number, number, number, number];
+/** Item roll multipliers [boost, shield, missile, oil, drone?]; a missing entry means 1. */
+export type ItemBias = readonly number[];
 
 export interface SpecialDef {
   name: string;
