@@ -64,6 +64,6 @@ describe("tracks table", () => {
     expect(cleanTrackId(99)).toBe(0);
     expect(cleanTrackId("1")).toBe(0);
     expect(cleanTrackId(2)).toBe(2);
-    expect(TRACKS.length).toBe(3);
+    expect(TRACKS.length).toBe(4);
   });
 });

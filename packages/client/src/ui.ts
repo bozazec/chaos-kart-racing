@@ -43,6 +43,7 @@ export const ITEM_INFO: Record<number, { icon: string; name: string }> = {
   2: { icon: "🛡️", name: "Shield" },
   3: { icon: "🚀", name: "Missile" },
   4: { icon: "🛢️", name: "Oil slick" },
+  5: { icon: "🛩️", name: "Shahed drone" },
 };
 
 export const safeGet = (k: string) => {
@@ -197,12 +198,11 @@ export function createHome(a: HomeActions) {
   if (!Number.isInteger(character) || character < 0 || character >= CHARACTERS.length) character = 0;
   const chars = h("div", { class: "k-chars" });
   const detail = h("div", { class: "k-detail" });
-  /** Skill sheet for a character: stat bars, top speed, theme and item luck. */
+  /** Skill sheet for a character: stat bars, theme and item luck. */
   const showDetail = (id: number) => {
     const c = characterById(id);
     const p = paramsFor(id);
     const rows: [string, number, string][] = [
-      ["SPEED", c.stats.speed, `${Math.round(p.maxSpeed * 3.6)} km/h`],
       ["ACCEL", c.stats.accel, `${(p.accel / DEFAULT_PARAMS.accel).toFixed(1)}x`],
       ["HANDLING", c.stats.handling, `${(p.steerRate / DEFAULT_PARAMS.steerRate).toFixed(1)}x`],
       ["TOUGHNESS", c.stats.toughness, `${(Math.round(STUN_TICKS * (1 - 0.15 * (c.stats.toughness - 3))) / 60).toFixed(1)} s spin`],

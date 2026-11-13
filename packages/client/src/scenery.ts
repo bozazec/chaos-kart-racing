@@ -97,6 +97,86 @@ function portaMacedonia() {
   return g;
 }
 
+// ------------------------------------------------------------------ Niš
+/** Niš Fortress (Ottoman, 18th c.): thick crenellated curtain wall, round bastions and the tall Stambol gate. */
+function nisFortress() {
+  const stone = 0xb8a88c;
+  const dark = 0x8f8068;
+  const g = group(bx(70, 10, 6, stone));
+  for (let i = -33; i <= 33; i += 4) g.add(bx(2.2, 2.2, 6, stone, i, 10));
+  // Stambol gate: tower with a pointed arch passage and a wooden-roofed top
+  g.add(bx(14, 22, 12, dark, 0, 0, 0), bx(14.6, 1.4, 12.6, stone, 0, 22), bx(5, 9, 13, 0x1d1812, 0, 0, 0));
+  for (let i = -6; i <= 6; i += 4) g.add(bx(2, 2, 12.6, stone, i, 23.4));
+  g.add(new THREE.Mesh(new THREE.ConeGeometry(4.5, 5, 4), std(0x7a3f30)).translateY(27).rotateY(Math.PI / 4));
+  // round bastions at both ends and a return wall behind
+  for (const x of [-37, 37]) {
+    g.add(cyl(6.5, 7, 15, dark, x, 0, 0, 20));
+    for (let a = 0; a < 8; a++) g.add(bx(2, 2, 2, stone, x + Math.cos((a * Math.PI) / 4) * 6, 15, Math.sin((a * Math.PI) / 4) * 6));
+  }
+  g.add(bx(6, 9, 34, stone, -34, 0, -20), bx(6, 9, 34, stone, 34, 0, -20));
+  // low grass rampart in front
+  g.add(bx(76, 3, 7, 0x5f8a3f, 0, 0, 9));
+  return g;
+}
+
+/** Bubanj Memorial "Three Fists" (Bubanjski heroji): three concrete forearms ending in raised fists, tallest in the middle. */
+function bubanjMemorial() {
+  const concrete = 0xc9c6bd;
+  const shade = 0xaeaba2;
+  const g = group(cone(26, 6, 0x5f8a3f, 0, 0, 0, 20), bx(34, 2, 12, 0xd8d5cc, 0, 5));
+  const fist = (x: number, z: number, h: number, lean: number, w: number) => {
+    const f = new THREE.Group();
+    // forearm tapering upwards
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.55, w * 0.85, h, 6), std(concrete));
+    arm.position.y = h / 2;
+    // fist: block with knuckle ridge and thumb
+    const fy = h + w * 0.7;
+    const hand = bx(w * 1.45, w * 1.3, w * 1.25, concrete, 0, h - w * 0.1);
+    const knuckles = bx(w * 1.5, w * 0.3, w * 0.4, shade, 0, h + w * 0.95, w * 0.55);
+    const thumb = bx(w * 0.45, w * 0.9, w * 0.5, shade, w * 0.5, h + w * 0.1, w * 0.72);
+    void fy;
+    f.add(arm, hand, knuckles, thumb);
+    f.position.set(x, 7, z);
+    f.rotation.z = lean;
+    return f;
+  };
+  g.add(fist(-11, 0, 24, 0.09, 4.2), fist(0, 1, 34, 0, 5), fist(11, 0, 28, -0.09, 4.4));
+  return g;
+}
+
+/** Skull Tower (Ćele kula): small stone tower studded with rows of skulls, sheltered by an open chapel roof on pillars. */
+function celeKula() {
+  const g = group(bx(16, 1, 16, 0xcfc9b8, 0, 0, 0));
+  const tower = group(bx(7, 7.5, 7, 0xd9d3c0, 0, 0, 0), bx(7.6, 0.6, 7.6, 0xb9b29c, 0, 7.5));
+  const skull = std(0xf1ecd9);
+  const eye = std(0x2b2620);
+  const ballGeo = new THREE.SphereGeometry(0.42, 7, 6);
+  const eyeGeo = new THREE.SphereGeometry(0.1, 4, 4);
+  for (let row = 0; row < 7; row++) {
+    for (let i = 0; i < 6; i++) {
+      for (const [nx, nz, rot] of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]] as const) {
+        const u = (i - 2.5) * 1.0;
+        const sk = new THREE.Mesh(ballGeo, skull);
+        sk.position.set(nx ? nx * 3.55 : u, 0.7 + row * 1.0, nz ? nz * 3.55 : u);
+        tower.add(sk);
+        for (const ex of [-0.17, 0.17]) {
+          const e = new THREE.Mesh(eyeGeo, eye);
+          const off = new THREE.Vector3(ex, 0.05, 0.38).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+          e.position.copy(sk.position).add(off);
+          tower.add(e);
+        }
+      }
+    }
+  }
+  g.add(tower);
+  // chapel: four pillars, hip roof, cross
+  for (const [x, z] of [[-6.5, -6.5], [6.5, -6.5], [-6.5, 6.5], [6.5, 6.5]] as const) g.add(bx(1.3, 12, 1.3, 0xe8e2d0, x, 1, z));
+  g.add(bx(15, 1.2, 15, 0xe8e2d0, 0, 13));
+  g.add(new THREE.Mesh(new THREE.ConeGeometry(11.5, 6, 4), std(0x8a4a38)).translateY(17.2).rotateY(Math.PI / 4));
+  g.add(cross(5, 0xe6b422, 20));
+  return g;
+}
+
 // ------------------------------------------------------------------ placement
 interface Landmark {
   build: () => THREE.Object3D;
@@ -133,6 +213,17 @@ const SETS: Record<TrackScenery, { landmarks: Landmark[]; tree: "chestnut" | "au
     lamps: true,
     waterColor: 0x4a7fa0,
     bridge: { color: 0xc9b98a, kind: "chain" },
+  },
+  nis: {
+    landmarks: [
+      { build: nisFortress, at: 0.18, r: 42, side: -1 },
+      { build: bubanjMemorial, at: 0.52, r: 24, side: -1 },
+      { build: celeKula, at: 0.8, r: 12, side: -1 },
+    ],
+    tree: "chestnut",
+    lamps: false,
+    waterColor: 0x4a8a9a,
+    bridge: null,
   },
   skopje: {
     landmarks: [

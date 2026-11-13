@@ -244,7 +244,7 @@ describe("GameHost tracks", () => {
       host.toLobby();
       seen.push(host.trackId);
     }
-    expect(seen).toEqual([0, 1, 2, 0]);
+    expect(seen).toEqual([0, 1, 2, 3]);
   });
 });
 

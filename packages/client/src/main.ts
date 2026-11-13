@@ -10,6 +10,7 @@ import { ClientSession } from "./net/client";
 import { requestReset } from "./input";
 import { isTouchDevice, setTouchControlsVisible, setTouchItem, setTouchSpecial } from "./touch";
 import { getCustomHead } from "./customhead";
+import { initMusic } from "./music";
 import { askName, createHome, createRoomUI, injectStyles, ITEM_INFO, safeGet, safeSet } from "./ui";
 
 let track: Track = buildTrackById(0);
@@ -51,7 +52,7 @@ function applyTrack(id: number) {
   trackGroup = buildTrackMesh(track, def.theme, kitReady());
   if (kitReady()) trackGroup.add(buildKitRoad(trackTiles(id), def.tile));
   trackGroup.add(buildScenery(track, def.scenery, !!def.theme.glow));
-  trackGroup.add(buildKitProps(track, !!def.theme.glow));
+  trackGroup.add(buildKitProps(track, !!def.theme.glow, def.startSign));
   scene.add(trackGroup);
   boxMeshes = track.itemBoxes.map((b) => {
     const m = buildItemBox();
@@ -119,13 +120,14 @@ spText.style.cssText = "position:relative";
 spSlot.append(spFill, spText);
 document.body.appendChild(spSlot);
 let spShown = "";
+initMusic();
 const leaveBtn = document.createElement("button");
 leaveBtn.textContent = "Leave (Esc)";
-leaveBtn.style.cssText = "position:fixed;top:12px;right:12px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
+leaveBtn.style.cssText = "position:fixed;top:12px;right:60px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
 document.body.appendChild(leaveBtn);
 const restartBtn = document.createElement("button");
 restartBtn.textContent = "Restart";
-restartBtn.style.cssText = "position:fixed;top:12px;right:140px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
+restartBtn.style.cssText = "position:fixed;top:12px;right:188px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
 restartBtn.addEventListener("click", () => session?.restart?.());
 document.body.appendChild(restartBtn);
 

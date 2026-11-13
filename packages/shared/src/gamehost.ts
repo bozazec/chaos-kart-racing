@@ -185,7 +185,7 @@ export class GameHost {
       k.prev = k.cur;
       k.cur = stepKart(k.cur, input, this.track, TICK_DT, k.params);
       // item went away without a pickup: missile/oil are spawned here (boost/shield are handled in the sim)
-      if ((itemBefore === Item.Missile || itemBefore === Item.Oil) && k.cur.item === Item.None) used.push([itemBefore, k]);
+      if ((itemBefore === Item.Missile || itemBefore === Item.Oil || itemBefore === Item.Drone) && k.cur.item === Item.None) used.push([itemBefore, k]);
       // special fired this tick: the host casts the area/world part
       if (spBefore === 0 && k.cur.spCd > 0) casts.push(k);
     }
@@ -195,9 +195,9 @@ export class GameHost {
       list.forEach((k, i) => (k.cur = res[i]!));
     }
     if (racing) {
-      for (const [item, k] of used) this.items.spawnFrom(item, k.slot, k.cur);
       const order = this.rankedSlots();
       const all = [...this.karts.values()];
+      for (const [item, k] of used) this.items.spawnFrom(item, k.slot, k.cur, this.items.targetAhead(k.slot, all, order));
       for (const k of casts) this.items.castSpecial(k.params.charId, k, all, order);
       const denom = Math.max(1, order.length - 1);
       this.items.step(all, (slot) => Math.max(0, order.indexOf(slot)) / denom, TICK_DT);

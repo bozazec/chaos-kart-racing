@@ -45,7 +45,7 @@ describe("rollItem", () => {
     const last = dist(1);
     expect(first[Item.Oil]!).toBeGreaterThan(last[Item.Oil]! * 3);
     expect(last[Item.Missile]!).toBeGreaterThan(first[Item.Missile]! * 2);
-    for (const it of [Item.Boost, Item.Shield, Item.Missile, Item.Oil]) expect(first[it]).toBeGreaterThan(0);
+    for (const it of [Item.Boost, Item.Shield, Item.Missile, Item.Oil, Item.Drone]) expect(first[it]).toBeGreaterThan(0);
   });
 });
 
@@ -155,6 +155,18 @@ describe("missiles and oil", () => {
     w.spawnFrom(Item.Missile, 1, onTrack(1, 10).cur);
     for (let i = 0; i < MISSILE_TTL + 2; i++) w.step([], () => 0, TICK_DT);
     expect(w.objs.length).toBe(0);
+  });
+  it("drone item homes in on the kart ahead of the user and hits it", () => {
+    const w = new ItemWorld(track);
+    const shooter = onTrack(1, 40, { item: Item.Drone });
+    const victim = onTrack(2, 60);
+    const target = w.targetAhead(1, [shooter, victim], [2, 1]);
+    expect(target).toBe(2);
+    expect(w.targetAhead(2, [shooter, victim], [2, 1])).toBe(-1); // leader has nobody ahead
+    w.spawnFrom(Item.Drone, 1, shooter.cur, target);
+    for (let i = 0; i < 300 && victim.cur.stunT === 0; i++) w.step([shooter, victim], () => 0, TICK_DT);
+    expect(victim.cur.stunT).toBeGreaterThan(0);
+    expect(shooter.cur.stunT).toBe(0);
   });
   it("oil spins out a kart that drives over it, not the owner at first", () => {
     const w = new ItemWorld(track);
