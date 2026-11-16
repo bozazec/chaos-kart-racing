@@ -1,5 +1,5 @@
 import { nearestOnTrack, type Track } from "./track";
-import { BOOST_TICKS, Item, ITEM_COOLDOWN, SHIELD_TICKS, SPECIAL_CD, SPECIAL_START, STUN_TICKS, type KartInput, type KartState } from "./types";
+import { BOOST_TICKS, SPECIAL_BOOST_TICKS, Item, ITEM_COOLDOWN, SHIELD_TICKS, SPECIAL_CD, SPECIAL_START, STUN_TICKS, type KartInput, type KartState } from "./types";
 
 export const TICK_DT = 1 / 60;
 
@@ -118,7 +118,7 @@ export function stepKart(
     spCd = SPECIAL_CD;
     switch (p.charId) {
       case 1: // Overclock
-        boostT = Math.round(BOOST_TICKS * 1.75);
+        boostT = SPECIAL_BOOST_TICKS;
         break;
       case 4: // Green Shield
         shield = true;
@@ -127,7 +127,7 @@ export function stepKart(
         slowT = 0;
         break;
       case 7: // Gold Rush
-        boostT = Math.max(boostT, BOOST_TICKS);
+        boostT = Math.max(boostT, SPECIAL_BOOST_TICKS);
         shield = true;
         shieldT = SHIELD_TICKS;
         break;
