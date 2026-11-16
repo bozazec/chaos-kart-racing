@@ -35,6 +35,7 @@ interface ObjSample {
   x: number;
   z: number;
   type: number;
+  owner: number;
 }
 
 export class ClientSession implements Session {
@@ -251,7 +252,7 @@ export class ClientSession implements Session {
     this.boxMask = snap.world.boxMask;
     for (const o of snap.world.objs) {
       const b = this.objBuf.get(o.id) ?? [];
-      b.push({ t: now, x: o.x, z: o.z, type: o.type });
+      b.push({ t: now, x: o.x, z: o.z, type: o.type, owner: o.owner });
       if (b.length > 20) b.shift();
       this.objBuf.set(o.id, b);
     }
@@ -369,10 +370,10 @@ export class ClientSession implements Session {
       while (i > 0 && buf[i]!.t > rt) i--;
       const a0 = buf[i]!;
       const a1 = buf[i + 1];
-      if (!a1 || rt <= a0.t) objects.push({ id, type: a0.type, x: a0.x, z: a0.z });
+      if (!a1 || rt <= a0.t) objects.push({ id, type: a0.type, owner: a0.owner, x: a0.x, z: a0.z });
       else {
         const t = Math.min(1, (rt - a0.t) / (a1.t - a0.t));
-        objects.push({ id, type: a0.type, x: lerp(a0.x, a1.x, t), z: lerp(a0.z, a1.z, t) });
+        objects.push({ id, type: a0.type, owner: a0.owner, x: lerp(a0.x, a1.x, t), z: lerp(a0.z, a1.z, t) });
       }
     }
     return { boxMask: this.boxMask, objects };

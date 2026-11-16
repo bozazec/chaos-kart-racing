@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, trackTiles, type Track } from "@kart/shared";
-import { buildItemBox, buildKartMesh, loadKartModel, buildDrone, buildExplosion, buildMissile, buildOil, buildTrackMesh, makeNameplate, setKartEffects, updateKartLook } from "./scene";
+import { buildItemBox, buildKartMesh, loadKartModel, buildDrone, buildExplosion, buildMissile, buildOil, buildTrackMesh, makeNameplate, makeXpPop, setKartEffects, updateKartLook } from "./scene";
 import { buildScenery } from "./scenery";
 import { buildKitProps, buildKitRoad, kitReady, loadProps } from "./props";
 import { Minimap } from "./minimap";
@@ -11,6 +11,10 @@ import { requestReset } from "./input";
 import { isTouchDevice, setTouchControlsVisible, setTouchItem, setTouchSpecial } from "./touch";
 import { getCustomHead } from "./customhead";
 import { initMusic } from "./music";
+import { addXp as addXpLater, initProgress } from "./progress";
+import { initProgressHud } from "./hudprogress";
+import { RewardTracker } from "./rewards";
+import { playXpSound } from "./sfx";
 import { askName, createHome, createRoomUI, injectStyles, ITEM_INFO, safeGet, safeSet } from "./ui";
 
 let track: Track = buildTrackById(0);
@@ -72,6 +76,7 @@ function applyTrack(id: number) {
 const objMeshes = new Map<number, THREE.Object3D>();
 const objLast = new Map<number, { x: number; z: number; type: number; y: number }>();
 const blasts: THREE.Mesh[] = [];
+const xpPops: THREE.Sprite[] = [];
 const DRONE_Y = 6.5; // about 5 car heights above the track
 
 const karts = new Map<number, THREE.Group>();
@@ -121,20 +126,36 @@ spSlot.append(spFill, spText);
 document.body.appendChild(spSlot);
 let spShown = "";
 initMusic();
+const toastXp = initProgressHud();
+void initProgress();
+const rewards = new RewardTracker((xp, why) => {
+  toastXp(xp, why);
+  playXpSound(xp);
+  const km = session ? karts.get(session.mySlot) : undefined;
+  if (km) {
+    const pop = makeXpPop(xp, why);
+    pop.position.set(km.position.x, 2.2, km.position.z);
+    pop.userData.age = 0;
+    pop.userData.dx = (Math.random() - 0.5) * 1.2;
+    scene.add(pop);
+    xpPops.push(pop);
+  }
+  void addXpLater(xp);
+});
 const leaveBtn = document.createElement("button");
 leaveBtn.textContent = "Leave (Esc)";
-leaveBtn.style.cssText = "position:fixed;top:12px;right:60px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
+leaveBtn.style.cssText = "position:fixed;top:58px;right:12px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
 document.body.appendChild(leaveBtn);
 const restartBtn = document.createElement("button");
 restartBtn.textContent = "Restart";
-restartBtn.style.cssText = "position:fixed;top:12px;right:188px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
+restartBtn.style.cssText = "position:fixed;top:58px;right:120px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
 restartBtn.addEventListener("click", () => session?.restart?.());
 document.body.appendChild(restartBtn);
 
 const resetBtn = document.createElement("button");
 resetBtn.textContent = "↺ Checkpoint (R)";
 resetBtn.title = "Back to the last checkpoint";
-resetBtn.style.cssText = "position:fixed;top:56px;right:12px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
+resetBtn.style.cssText = "position:fixed;top:100px;right:12px;display:none;padding:8px 16px;font:600 15px system-ui,sans-serif;cursor:pointer;border-radius:8px;border:0;z-index:5";
 resetBtn.addEventListener("click", requestReset);
 document.body.appendChild(resetBtn);
 const wrongWay = document.createElement("div");
@@ -334,6 +355,27 @@ function frame(now: number) {
       }
       objLast.set(o.id, { x: o.x, z: o.z, type: o.type, y: o.type === 5 ? DRONE_Y : 0.9 });
     }
+    for (let i = xpPops.length - 1; i >= 0; i--) {
+      const p = xpPops[i]!;
+      const a = (p.userData.age += dt);
+      const k = a / 1.4;
+      p.position.y += dt * (3.2 - 1.6 * k);
+      p.userData.ox = (p.userData.ox ?? 0) + dt * p.userData.dx;
+      const owner = session ? karts.get(session.mySlot) : undefined;
+      if (owner) {
+        p.position.x = owner.position.x + p.userData.ox; // stays with the kart as it speeds on
+        p.position.z = owner.position.z;
+      }
+      const grow = a < 0.15 ? 0.4 + (a / 0.15) * 0.8 : 1.2 - Math.min(0.2, (a - 0.15) * 0.3);
+      p.scale.set(p.userData.w * grow, (p.userData.w / 4) * grow, 1);
+      (p.material as THREE.SpriteMaterial).opacity = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+      if (k >= 1) {
+        scene.remove(p);
+        (p.material as THREE.SpriteMaterial).map?.dispose();
+        p.material.dispose();
+        xpPops.splice(i, 1);
+      }
+    }
     for (let i = blasts.length - 1; i >= 0; i--) {
       const b = blasts[i]!;
       const a = (b.userData.age += dt);
@@ -459,6 +501,18 @@ function frame(now: number) {
       spShown = "";
     }
     const mine = rv.players.find((p) => p.slot === session!.mySlot);
+    rewards.frame({
+      now,
+      phase: rv.phase,
+      waiting: !!rv.waiting,
+      racers: rv.players.filter((p) => !p.waiting).length,
+      mySlot: session.mySlot,
+      pos: mine?.pos ?? 0,
+      lap: st?.lap ?? 0,
+      finished: !!st?.finished,
+      karts: new Map(rendered.map((k) => [k.slot, { x: k.x, z: k.z, stunned: !!k.stunned }])),
+      objects: wv.objects,
+    });
     const keys = isTouchDevice ? "Joystick: drive · ITEM · ★ special · ↺ checkpoint" : "WASD/arrows · Space item · E special" + (session.isHost ? " · L lobby" : "") + " · R checkpoint";
     if (st && !rv.waiting) {
       const pos = rv.phase === Phase.Race || rv.phase === Phase.Results ? `Pos ${mine?.pos || "–"}/${rv.players.filter((p) => !p.waiting).length}\n` : "";

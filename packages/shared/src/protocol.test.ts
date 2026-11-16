@@ -6,7 +6,7 @@ const st: KartState = { x: 12.5, z: -300.25, heading: 1.25, speed: 33.33, segIdx
 
 describe("protocol", () => {
   it("snapshot roundtrip incl. items/world, 32 B per kart", () => {
-    const world = { boxMask: 0b1010_0000_0001, objs: [{ id: 7, type: 4, x: 1.5, z: -2.5 }] };
+    const world = { boxMask: 0b1010_0000_0001, objs: [{ id: 7, type: 4, owner: 3, x: 1.5, z: -2.5 }] };
     const buf = encodeSnapshot(3, 123456, Phase.Race, [{ slot: 4, state: st, ackSeq: 70000 }], world);
     expect(buf.byteLength).toBe(8 + 32 + 5 + 10);
     const d = decodeSnapshot(buf)!;

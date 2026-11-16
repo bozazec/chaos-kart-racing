@@ -76,7 +76,7 @@ export interface KartRender {
 
 export interface WorldRender {
   boxMask: number;
-  objects: { id: number; type: number; x: number; z: number }[];
+  objects: { id: number; type: number; owner: number; x: number; z: number }[];
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -361,7 +361,7 @@ export class GameHost {
       this.tick,
       this.phase,
       [...this.karts.values()].map((k) => ({ slot: k.slot, state: k.cur, ackSeq: k.ack })),
-      { boxMask: this.items.boxMask(), objs: this.items.objs.map((o) => ({ id: o.id, type: o.type, x: o.x, z: o.z })) },
+      { boxMask: this.items.boxMask(), objs: this.items.objs.map((o) => ({ id: o.id, type: o.type, owner: o.owner, x: o.x, z: o.z })) },
     );
     for (const [id, p] of this.peers) if (p.ready) this.tx.sendSnapshot(id, buf);
   }
@@ -404,7 +404,7 @@ export class GameHost {
   }
 
   worldRender(): WorldRender {
-    return { boxMask: this.items.boxMask(), objects: this.items.objs.map((o) => ({ id: o.id, type: o.type, x: o.x, z: o.z })) };
+    return { boxMask: this.items.boxMask(), objects: this.items.objs.map((o) => ({ id: o.id, type: o.type, owner: o.owner, x: o.x, z: o.z })) };
   }
 
   // ---------------------------------------------------------------- peers

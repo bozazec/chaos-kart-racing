@@ -457,3 +457,34 @@ export function buildOil(): THREE.Mesh {
   m.position.y = 0.08;
   return m;
 }
+
+/** Floating "+10 XP" label that rises out of the kart; bigger awards are gold and larger. */
+export function makeXpPop(xp: number, why: string): THREE.Sprite {
+  const cv = document.createElement("canvas");
+  cv.width = 512;
+  cv.height = 128;
+  const ctx = cv.getContext("2d")!;
+  const big = xp >= 40;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = "rgba(20,10,40,.95)";
+  ctx.font = `900 ${big ? 78 : 64}px system-ui, sans-serif`;
+  ctx.strokeText(`+${xp} XP`, 256, 48);
+  ctx.fillStyle = big ? "#ffd23f" : "#7dffb0";
+  ctx.fillText(`+${xp} XP`, 256, 48);
+  ctx.font = "800 34px system-ui, sans-serif";
+  ctx.lineWidth = 8;
+  ctx.strokeText(why, 256, 108);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(why, 256, 108);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+  sp.renderOrder = 20;
+  const w = big ? 6 : 4.4;
+  sp.scale.set(w, w / 4, 1);
+  sp.userData.w = w;
+  return sp;
+}

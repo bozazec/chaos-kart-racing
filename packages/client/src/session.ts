@@ -16,7 +16,7 @@ export interface RenderKart {
 export interface WorldView {
   /** Bit i set = item box i available. */
   boxMask: number;
-  objects: { id: number; type: number; x: number; z: number }[];
+  objects: { id: number; type: number; owner: number; x: number; z: number }[];
 }
 
 export interface Hud {
