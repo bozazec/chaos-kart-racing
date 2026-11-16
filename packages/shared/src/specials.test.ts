@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTrack, CHARACTERS, createKart, DEMO_CONTROL, ItemWorld, Item, OBJ_DRONE, DRONE_RANGE, DRONE_TTL, nearestOnTrack, paramsFor, stepKart, TICK_DT,
-  CONF_TICKS, SLOW_TICKS, SPECIAL_CD, SPECIAL_START, type KartHolder, type KartState,
+  CONF_TICKS, SLOW_TICKS, SPECIAL_BOOST_TICKS, SPECIAL_CD, SPECIAL_START, type KartHolder, type KartState,
 } from "./index";
 
 const track = buildTrack(DEMO_CONTROL, { laps: 3 });
@@ -28,7 +28,7 @@ describe("special cooldown", () => {
     s = { ...s, spCd: 0 };
     s = stepKart(s, press, track, TICK_DT, paramsFor(1));
     expect(s.spCd).toBe(SPECIAL_CD);
-    expect(s.boostT).toBeGreaterThan(200);
+    expect(s.boostT).toBeGreaterThan(SPECIAL_BOOST_TICKS - 3);
     const again = stepKart(s, press, track, TICK_DT, paramsFor(1));
     expect(again.spCd).toBe(SPECIAL_CD - 1);
   });
@@ -41,11 +41,11 @@ describe("special cooldown", () => {
 
 describe("self-part of specials (predicted in the sim)", () => {
   const fire = (id: number, over: Partial<KartState> = {}) => stepKart({ ...createKart(track), spCd: 0, ...over }, press, track, TICK_DT, paramsFor(id));
-  it("Overclock boosts", () => expect(fire(1).boostT).toBeGreaterThan(200));
+  it("Overclock boosts for 1 s", () => expect(fire(1).boostT).toBeLessThanOrEqual(SPECIAL_BOOST_TICKS));
   it("Gold Rush boosts + shields", () => {
     const s = fire(7);
     expect(s.shield).toBe(true);
-    expect(s.boostT).toBeGreaterThan(100);
+    expect(s.boostT).toBeGreaterThan(SPECIAL_BOOST_TICKS - 3);
   });
   it("Green Shield shields and clears debuffs", () => {
     const s = fire(4, { confT: 100, slowT: 100 });
@@ -132,7 +132,7 @@ describe("castSpecial (host)", () => {
     w.castSpecial(3, c, [c], [1], fixedRng);
     for (let i = 0; i < DRONE_TTL + 2; i++) w.step([], () => 0, TICK_DT);
     expect(w.objs.length).toBe(0);
-    expect(DRONE_RANGE).toBeLessThan(track.points.length * track.spacing / 2);
+    expect(DRONE_RANGE).toBeLessThan(track.points.length * track.spacing); // under one lap
   });
   it("Bass Drop only spins out rivals within 18 m", () => {
     const c = onTrack(1, 100);

@@ -20,6 +20,8 @@ export interface KartSnap {
 export interface ObjSnap {
   id: number;
   type: number;
+  /** slot that fired it (missile/drone/oil); sent in the high nibble of the type byte */
+  owner: number;
   x: number;
   z: number;
 }
@@ -74,7 +76,7 @@ export function encodeSnapshot(epoch: number, tick: number, phase: PhaseId, kart
   o += 5;
   for (const ob of world.objs) {
     v.setUint8(o, ob.id);
-    v.setUint8(o + 1, ob.type);
+    v.setUint8(o + 1, (ob.type & 15) | ((ob.owner & 15) << 4));
     v.setFloat32(o + 2, ob.x);
     v.setFloat32(o + 6, ob.z);
     o += SNAP_OBJ;
@@ -124,7 +126,8 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot | null {
   if (buf.byteLength < o + nObj * SNAP_OBJ) return null;
   const objs: ObjSnap[] = [];
   for (let i = 0; i < nObj; i++) {
-    objs.push({ id: v.getUint8(o), type: v.getUint8(o + 1), x: v.getFloat32(o + 2), z: v.getFloat32(o + 6) });
+    const tb = v.getUint8(o + 1);
+    objs.push({ id: v.getUint8(o), type: tb & 15, owner: tb >> 4, x: v.getFloat32(o + 2), z: v.getFloat32(o + 6) });
     o += SNAP_OBJ;
   }
   return { epoch: v.getUint8(1), tick: v.getUint32(2), phase: v.getUint8(6) as PhaseId, karts, world: { boxMask, objs } };

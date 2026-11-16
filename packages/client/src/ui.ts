@@ -132,9 +132,15 @@ export function injectStyles() {
 .k-sw{width:14px;height:14px;border-radius:4px;flex:none}
 .k-pl .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .k-tag{font-size:12px;opacity:.7}
+.k-top{position:fixed;top:118px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;max-width:92vw;pointer-events:none}
+.k-roster{display:none;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 10px;border-radius:14px;background:rgba(10,16,34,.72);font:600 13px system-ui,sans-serif;text-shadow:none}
+.k-roster .c{opacity:.8;align-self:center;padding-right:4px}
+.k-roster .p{display:flex;align-items:center;gap:5px;padding:2px 8px 2px 3px;border-radius:99px;background:rgba(255,255,255,.12)}
+.k-roster .p.me{outline:1px solid #ffd23f}
+.k-roster .p .k-tag{font-size:11px}
 .k-board{position:fixed;top:56px;right:12px;min-width:150px;font:600 14px system-ui,sans-serif;text-shadow:0 1px 3px #000;pointer-events:none;display:none}
 .k-board div{display:flex;gap:6px;align-items:center;padding:1px 0}
-.k-wait{position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 16px;border-radius:99px;background:rgba(10,16,34,.8);font:600 15px system-ui,sans-serif;display:none;pointer-events:none}
+.k-wait{padding:8px 16px;border-radius:99px;background:rgba(10,16,34,.8);font:600 15px system-ui,sans-serif;display:none;pointer-events:none}
 `,
     }),
   );
@@ -404,7 +410,9 @@ export function createRoomUI(act: RoomActions) {
   const overlay = h("div", { class: "k-overlay" });
   const board = h("div", { class: "k-board" });
   const wait = h("div", { class: "k-wait", textContent: "Round in progress. You're in the queue for the next one" });
-  document.body.append(overlay, board, wait);
+  const roster = h("div", { class: "k-roster" });
+  const top = h("div", { class: "k-top" }, roster, wait);
+  document.body.append(overlay, board, top);
 
   const playerRow = (p: PlayerInfo, mySlot: number, showPos: boolean, showTime: boolean) =>
     h(
@@ -425,10 +433,20 @@ export function createRoomUI(act: RoomActions) {
 
       wait.style.display = v.waiting && v.phase !== Phase.Lobby ? "block" : "none";
 
+      // who is in the room: small list at the top while in the lobby / queued for the next round, so a full lobby is obvious
+      if (v.phase === Phase.Lobby || v.waiting) {
+        roster.replaceChildren(
+          h("span", { class: "c", textContent: `${v.players.length}/${MAX_PLAYERS}${v.players.length >= MAX_PLAYERS ? " · FULL" : ""}` }),
+          ...v.players.map((p) => h("span", { class: `p${p.slot === ctx.mySlot ? " me" : ""}` }, avatar(p.character, 22), h("span", { textContent: p.name }), ...(p.waiting && v.phase !== Phase.Lobby ? [h("span", { class: "k-tag", textContent: "waiting" })] : []))),
+        );
+        roster.style.display = "flex";
+      } else roster.style.display = "none";
+
       // live standings
       if (v.phase === Phase.Race) {
         const racers = v.players.filter((p) => !p.waiting).sort((a, b) => a.pos - b.pos);
-        board.replaceChildren(...racers.map((p) => h("div", {}, h("span", { textContent: `${p.pos}.` }), avatar(p.character, 22), h("span", { textContent: p.name + (p.slot === ctx.mySlot ? " ◀" : "") }))));
+        const queued = v.players.filter((p) => p.waiting).length;
+        board.replaceChildren(...racers.map((p) => h("div", {}, h("span", { textContent: `${p.pos}.` }), avatar(p.character, 22), h("span", { textContent: p.name + (p.slot === ctx.mySlot ? " ◀" : "") }))), ...(queued ? [h("div", { class: "k-muted", textContent: `⏳ ${queued} waiting for next round` })] : []));
         board.style.display = "block";
       } else board.style.display = "none";
 
@@ -491,7 +509,7 @@ export function createRoomUI(act: RoomActions) {
     },
     hide() {
       sig = "";
-      overlay.style.display = board.style.display = wait.style.display = "none";
+      overlay.style.display = board.style.display = wait.style.display = roster.style.display = "none";
     },
   };
 }
