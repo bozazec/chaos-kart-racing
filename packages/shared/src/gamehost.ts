@@ -1,4 +1,5 @@
 import { characterById, cleanCharacter, paramsFor } from "./characters";
+import { cleanCosmetics } from "./cosmetics";
 import { ItemWorld } from "./items";
 import {
   cleanName,
@@ -36,7 +37,7 @@ export interface HostTransport {
 
 export interface GameHostOptions {
   /** Slot 0 is a local player on the host's machine (browser host / solo). Absent = dedicated server. */
-  hostPlayer?: { name: string; character: number; input: () => KartInput };
+  hostPlayer?: { name: string; character: number; cosmetics?: number; input: () => KartInput };
   /** Dedicated rooms have no host UI: start automatically once enough players are in the lobby. */
   autoStart?: { minPlayers: number; delaySec: number };
   /** Dedicated rooms: move to the next track after every round. */
@@ -92,6 +93,7 @@ export class GameHost {
   private peers = new Map<number, PeerInfo>();
   private names = new Map<number, string>();
   private chars = new Map<number, number>();
+  private cos = new Map<number, number>(); // slot -> active store items (styling only, never read by the sim)
   private finishTick = new Map<number, number>(); // slot -> raceTick when finished
   private track: Track;
   private items: ItemWorld;
@@ -116,6 +118,7 @@ export class GameHost {
     if (opts.hostPlayer) {
       this.names.set(0, cleanName(opts.hostPlayer.name, "Host"));
       this.chars.set(0, cleanCharacter(opts.hostPlayer.character));
+      this.cos.set(0, cleanCosmetics(opts.hostPlayer.cosmetics));
       this.karts.set(0, this.newKart(0));
     }
   }
@@ -325,11 +328,12 @@ export class GameHost {
         lap: k.cur.lap,
         finishTime: f === undefined ? -1 : f / HZ,
         character: this.chars.get(k.slot) ?? 0,
+        cos: this.cos.get(k.slot) ?? 0,
       });
     }
     for (const [, p] of this.peers) {
       if (p.ready && !this.karts.has(p.slot)) {
-        out.push({ slot: p.slot, name: this.names.get(p.slot) ?? `Player ${p.slot}`, waiting: true, pos: 0, lap: 0, finishTime: -1, character: this.chars.get(p.slot) ?? 0 });
+        out.push({ slot: p.slot, name: this.names.get(p.slot) ?? `Player ${p.slot}`, waiting: true, pos: 0, lap: 0, finishTime: -1, character: this.chars.get(p.slot) ?? 0, cos: this.cos.get(p.slot) ?? 0 });
       }
     }
     return out.sort((a, b) => a.slot - b.slot);
@@ -440,6 +444,7 @@ export class GameHost {
     this.karts.delete(peer.slot);
     this.names.delete(peer.slot);
     this.chars.delete(peer.slot);
+    this.cos.delete(peer.slot);
     this.finishTick.delete(peer.slot);
     this.broadcastRoom();
     this.registry();
@@ -471,8 +476,14 @@ export class GameHost {
     if (m.t === "hello") {
       this.names.set(peer.slot, cleanName(m.name, `Player ${peer.slot}`));
       this.chars.set(peer.slot, cleanCharacter(m.character));
+      this.cos.set(peer.slot, cleanCosmetics(m.cos));
       const pk = this.karts.get(peer.slot);
       if (pk) this.applyChar(pk);
+      this.broadcastRoom();
+    } else if (m.t === "cos") {
+      const next = cleanCosmetics(m.cos);
+      if (next === (this.cos.get(peer.slot) ?? 0)) return;
+      this.cos.set(peer.slot, next);
       this.broadcastRoom();
     } else if (m.t === "char") {
       if (this.phase !== Phase.Lobby) return;
@@ -491,6 +502,14 @@ export class GameHost {
     if (this.phase !== Phase.Lobby || !k) return;
     this.chars.set(0, cleanCharacter(id));
     this.applyChar(k);
+    this.broadcastRoom();
+  }
+
+  /** The local host player's active store items changed. */
+  setLocalCosmetics(mask: number) {
+    const next = cleanCosmetics(mask);
+    if (!this.opts.hostPlayer || next === (this.cos.get(0) ?? 0)) return;
+    this.cos.set(0, next);
     this.broadcastRoom();
   }
 }

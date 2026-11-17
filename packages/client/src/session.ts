@@ -56,6 +56,8 @@ export interface Session {
   closedReason?: string | null;
   /** Lobby only: switch driver. */
   setCharacter?(id: number): void;
+  /** My active store items (bitmask) changed: tell the room. */
+  setCosmetics?(mask: number): void;
   /** Host only, lobby only: pick the track. */
   setTrack?(id: number): void;
   /** Host only. */

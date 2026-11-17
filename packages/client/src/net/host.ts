@@ -35,7 +35,7 @@ export class HostSession implements Session {
   /** relay requests that arrived while we were still setting the peer up */
   private earlyRelay = new Set<number>();
 
-  constructor(trackId: number, hostName = "Host", hostCharacter = 0) {
+  constructor(trackId: number, hostName = "Host", hostCharacter = 0, cosmetics = 0) {
     this.gh = new GameHost(
       trackId,
       {
@@ -48,7 +48,7 @@ export class HostSession implements Session {
         sendEvt: (id, m) => this.sendEvt(id, m),
         onRegistry: (info) => this.sig?.send({ t: "update", ...info }),
       },
-      { hostPlayer: { name: hostName, character: hostCharacter, input: sampleInput } },
+      { hostPlayer: { name: hostName, character: hostCharacter, cosmetics, input: sampleInput } },
     );
     try {
       this.worker = new Worker(new URL("./tick.worker.ts", import.meta.url), { type: "module" });
@@ -131,6 +131,9 @@ export class HostSession implements Session {
   }
   setCharacter(id: number) {
     this.gh.setLocalCharacter(id);
+  }
+  setCosmetics(mask: number) {
+    this.gh.setLocalCosmetics(mask);
   }
 
   // ---- transport ----

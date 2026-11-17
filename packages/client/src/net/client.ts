@@ -1,5 +1,6 @@
 import {
   cleanCharacter,
+  cleanCosmetics,
   buildTrackById,
   cleanName,
   cleanTrackId,
@@ -54,6 +55,7 @@ export class ClientSession implements Session {
   /** physics params of my character (host derives the same ones) */
   private params: KartParams = paramsFor(0);
   mode: "p2p" | "relay" = "p2p";
+  private cosSent: number | null = null;
   private sig!: Signaling;
 
   private cur: KartState | null = null;
@@ -87,15 +89,15 @@ export class ClientSession implements Session {
     if (next !== this.track.id) this.track = buildTrackById(next);
   }
 
-  static async join(room: string, opts: { forceRelay?: boolean; name?: string; character?: number } = {}): Promise<ClientSession> {
+  static async join(room: string, opts: { forceRelay?: boolean; name?: string; character?: number; cosmetics?: number } = {}): Promise<ClientSession> {
     const c = new ClientSession();
     c.roomCode = room;
     c.params = paramsFor(cleanCharacter(opts.character));
-    await c.connect(room, !!opts.forceRelay, cleanName(opts.name, "Player"), cleanCharacter(opts.character));
+    await c.connect(room, !!opts.forceRelay, cleanName(opts.name, "Player"), cleanCharacter(opts.character), cleanCosmetics(opts.cosmetics));
     return c;
   }
 
-  private async connect(room: string, forceRelay: boolean, name: string, character: number) {
+  private async connect(room: string, forceRelay: boolean, name: string, character: number, cos: number) {
     const sig = (this.sig = await Signaling.connect());
     sig.onClose(() => {
       if (!this.disposed) this.closedReason ??= "disconnected from signaling";
@@ -125,7 +127,7 @@ export class ClientSession implements Session {
           this.useTrack(m.track);
           clearTimeout(timer);
           clearTimeout(relayTimer);
-          this.sendEvt?.({ t: "hello", name, character });
+          this.sendEvt?.({ t: "hello", name, character, cos: this.cosSent ?? cos });
           this.pingTimer = window.setInterval(() => this.sendEvt?.({ t: "ping", ts: performance.now() }), 2000);
           res();
         } else if (m.t === "room") {
@@ -408,6 +410,12 @@ export class ClientSession implements Session {
     const c = cleanCharacter(id);
     this.params = paramsFor(c);
     this.sendEvt?.({ t: "char", character: c });
+  }
+
+  /** My active store items changed (bought / expired). */
+  setCosmetics(mask: number) {
+    this.cosSent = cleanCosmetics(mask);
+    this.sendEvt?.({ t: "cos", cos: this.cosSent });
   }
 
   dispose() {

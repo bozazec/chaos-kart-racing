@@ -150,15 +150,32 @@ function headTexture(id: number, custom?: string | null): THREE.CanvasTexture {
     return t;
   }
   headTex.set(id, t);
-  (["f", "b"] as const).forEach((v, i) => {
-    const img = new Image();
-    img.onload = () => {
-      ctx.drawImage(img, i * 256, 0, 256, 256);
-      t!.needsUpdate = true;
-    };
-    img.src = `/art/heads/h${id}${v}.png`;
-  });
+  headArt.set(
+    id,
+    Promise.all(
+      (["f", "b"] as const).map(
+        (v, i) =>
+          new Promise<void>((done) => {
+            const img = new Image();
+            img.onload = () => {
+              ctx.drawImage(img, i * 256, 0, 256, 256);
+              t!.needsUpdate = true;
+              done();
+            };
+            img.onerror = () => done(); // plain skin/hair colours stay
+            img.src = `/art/heads/h${id}${v}.png`;
+          }),
+      ),
+    ).then(() => undefined),
+  );
   return t;
+}
+
+const headArt = new Map<number, Promise<void>>();
+/** Resolves once a character's head art is painted on its texture (for pictures taken outside the game loop). */
+export function loadHeadArt(id: number): Promise<void> {
+  headTexture(id);
+  return headArt.get(id) ?? Promise.resolve();
 }
 
 function headBall(id: number, custom?: string | null): THREE.Mesh {
@@ -177,7 +194,10 @@ function headBall(id: number, custom?: string | null): THREE.Mesh {
   return m;
 }
 
-function build3DKart(g: THREE.Group, characterId: number, customHead?: string | null) {
+/** "Gold Chrome" store item: body paint. */
+const GOLD = 0xffc62e;
+
+function build3DKart(g: THREE.Group, characterId: number, customHead?: string | null, gold = false) {
   const { body: bodyC, accent, trim, skin, hair, metal } = characterById(characterId).kart;
   const car = kartModel!.clone(true);
   const mats = new Map<string, THREE.Material>();
@@ -189,8 +209,13 @@ function build3DKart(g: THREE.Group, characterId: number, customHead?: string | 
     if (!c) {
       const n = src.clone();
       if (src.name === "red") {
-        n.color.setHex(bodyC);
-        if (metal) {
+        n.color.setHex(gold ? GOLD : bodyC);
+        if (gold) {
+          // no environment map in this scene, so a little self-light keeps the metal bright instead of going dark
+          n.metalness = 0.6;
+          n.roughness = 0.25;
+          n.emissive.setHex(0x6b4700);
+        } else if (metal) {
           n.metalness = 0.55;
           n.roughness = 0.35;
         }
@@ -227,10 +252,12 @@ const HALF_L = 1.15; // proxy kart half length: standees stand just outside both
  *  - a lean 3D proxy (body, big wheels, torso, head in skin/hair colors) that shows through at the sides, where
  *    the standees are edge-on and fade out. See updateKartLook().
  */
-export function buildKartMesh(characterId: number, customHead?: string | null): THREE.Group {
+export function buildKartMesh(characterId: number, customHead?: string | null, gold = false): THREE.Group {
   const g = new THREE.Group();
-  const { body: bodyC, trim, skin, hair, metal } = characterById(characterId).kart;
-  if (kartModel) build3DKart(g, characterId, customHead);
+  const { trim, skin, hair } = characterById(characterId).kart;
+  const bodyC = gold ? GOLD : characterById(characterId).kart.body;
+  const metal = gold || characterById(characterId).kart.metal;
+  if (kartModel) build3DKart(g, characterId, customHead, gold);
   else {
     // proxy kart (hidden while a standee is facing the camera)
     const proxy = new THREE.Group();

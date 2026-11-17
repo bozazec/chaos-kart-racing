@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { buildTrackById, characterById, cleanTrackId, Phase, SPECIAL_CD, trackDef, trackTiles, type Track } from "@kart/shared";
-import { buildItemBox, buildKartMesh, loadKartModel, buildDrone, buildExplosion, buildMissile, buildOil, buildTrackMesh, makeNameplate, makeXpPop, setKartEffects, updateKartLook } from "./scene";
+import { buildTrackById, characterById, cleanCharacter, cleanTrackId, Cosmetic, Phase, SPECIAL_CD, trackDef, trackTiles, type Track } from "@kart/shared";
+import { buildItemBox, buildKartMesh, loadHeadArt, loadKartModel, buildDrone, buildExplosion, buildMissile, buildOil, buildTrackMesh, makeNameplate, makeXpPop, setKartEffects, updateKartLook } from "./scene";
 import { buildScenery } from "./scenery";
 import { buildKitProps, buildKitRoad, kitReady, loadProps } from "./props";
 import { Minimap } from "./minimap";
@@ -11,8 +11,10 @@ import { requestReset } from "./input";
 import { isTouchDevice, setTouchControlsVisible, setTouchItem, setTouchSpecial } from "./touch";
 import { getCustomHead } from "./customhead";
 import { initMusic } from "./music";
-import { addXp as addXpLater, initProgress } from "./progress";
+import { addXp as addXpLater, adminClearItems, adminGrant, getProgress, initProgress } from "./progress";
 import { initProgressHud } from "./hudprogress";
+import { CosmeticsFx, renderCosmeticThumb } from "./cosmeticsfx";
+import { activeCosmetics, initStore } from "./store";
 import { RewardTracker } from "./rewards";
 import { playXpSound } from "./sfx";
 import { askName, createHome, createRoomUI, injectStyles, ITEM_INFO, safeGet, safeSet } from "./ui";
@@ -82,13 +84,18 @@ const DRONE_Y = 6.5; // about 5 car heights above the track
 const karts = new Map<number, THREE.Group>();
 const kartChar = new Map<number, number>();
 const kartHead = new Map<number, string | null>(); // custom head image each built kart uses (own kart only)
+const kartGold = new Map<number, boolean>(); // "Gold Chrome" store item: the paint is part of the kart mesh
+// store items (styling only): every player's active ones arrive in the room state and are drawn here
+const cosFx = new CosmeticsFx(scene);
+const finishSeen = new Set<number>(); // slots whose finish has had its confetti
+let sentCos = 0; // my item mask as the room knows it
 const plates = new Map<number, { key: string; sprite: THREE.Sprite }>();
 function kartFor(slot: number) {
   let m = karts.get(slot);
   if (!m) {
     const head = slot === session?.mySlot ? getCustomHead() : null;
     kartHead.set(slot, head);
-    m = buildKartMesh(kartChar.get(slot) ?? 0, head);
+    m = buildKartMesh(kartChar.get(slot) ?? 0, head, kartGold.get(slot) ?? false);
     scene.add(m);
     karts.set(slot, m);
   }
@@ -126,8 +133,20 @@ spSlot.append(spFill, spText);
 document.body.appendChild(spSlot);
 let spShown = "";
 initMusic();
-const toastXp = initProgressHud();
-void initProgress();
+const storeThumbs = new Map<string, string>();
+const toastXp = initProgressHud(
+  initStore(async (c) => {
+    const character = cleanCharacter(Number(safeGet("kart.char")));
+    const key = `${character}|${c.id}`;
+    const have = storeThumbs.get(key);
+    if (have) return have;
+    await Promise.all([loadKartModel(), loadHeadArt(character)]);
+    const url = renderCosmeticThumb(renderer, c.bit, character);
+    if (url) storeThumbs.set(key, url);
+    return url;
+  }),
+);
+const progressLoaded = initProgress();
 const rewards = new RewardTracker((xp, why) => {
   toastXp(xp, why);
   playXpSound(xp);
@@ -168,7 +187,33 @@ const camPos = new THREE.Vector3();
 let camInit = false;
 let session: Session | null = null;
 // test/debug hook
-(window as unknown as Record<string, unknown>).__kart = { get track() { return track; }, get session() { return session; } };
+const debug: Record<string, unknown> = { get track() { return track; }, get session() { return session; } };
+(window as unknown as Record<string, unknown>).__kart = debug;
+// Admin tools for testing, in `pnpm dev` and in builds made with VITE_ADMIN=1 only (a normal build has none of this):
+//   console:  __kart.admin.coins(500)   __kart.admin.xp(2000)   __kart.admin.clearItems()   (negative numbers take away)
+//   URL:      ?coins=500 and/or ?xp=2000  (for phones; applied once, then removed from the address)
+if (import.meta.env.DEV || import.meta.env.VITE_ADMIN === "1") {
+  const report = () => {
+    const p = getProgress();
+    console.info(`[admin] ${p.coins} coins · ${p.xp} XP · items: ${Object.keys(p.items).join(", ") || "none"}`);
+  };
+  debug.admin = {
+    coins: (n = 100) => adminGrant(n).then(report),
+    xp: (n = 1000) => adminGrant(0, n).then(report),
+    clearItems: () => adminClearItems().then(report),
+  };
+  void progressLoaded.then(async () => {
+    const url = new URL(location.href);
+    const coins = Number(url.searchParams.get("coins")) || 0;
+    const xp = Number(url.searchParams.get("xp")) || 0;
+    if (!coins && !xp) return;
+    await adminGrant(coins, xp);
+    report();
+    url.searchParams.delete("coins");
+    url.searchParams.delete("xp");
+    history.replaceState(null, "", url);
+  });
+}
 applyTrack(0);
 // kit props load in the background; rebuild the scene dressing once they are in
 void loadProps().then(() => applyTrack(shownTrack));
@@ -197,11 +242,13 @@ home.show();
 async function start(kind: "solo" | "host" | "join", o: { name: string; character: number; roomName?: string; code?: string }) {
   await Promise.all([loadKartModel(), loadProps()]);
   home.error(kind === "solo" ? "" : "connecting…");
+  const cosmetics = activeCosmetics();
+  sentCos = cosmetics;
   try {
     if (kind === "join") {
-      session = await ClientSession.join(o.code!, { name: o.name, character: o.character, forceRelay: new URLSearchParams(location.search).has("relay") });
+      session = await ClientSession.join(o.code!, { name: o.name, character: o.character, cosmetics, forceRelay: new URLSearchParams(location.search).has("relay") });
     } else {
-      const h = new HostSession(cleanTrackId(Number(safeGet("kart.track"))), o.name, o.character);
+      const h = new HostSession(cleanTrackId(Number(safeGet("kart.track"))), o.name, o.character, cosmetics);
       session = h;
       if (kind === "host") await h.listen(o.roomName ?? "Kart room");
     }
@@ -225,6 +272,9 @@ function leave() {
   for (const m of karts.values()) scene.remove(m);
   karts.clear();
   kartChar.clear();
+  kartGold.clear();
+  cosFx.clear();
+  finishSeen.clear();
   plates.clear();
   minimap.show(false);
   for (const m of objMeshes.values()) scene.remove(m);
@@ -309,12 +359,20 @@ function frame(now: number) {
   if (session) {
     session.update(now);
     if (session.trackId() !== shownTrack) applyTrack(session.trackId());
+    // bought something / an item ran out: tell the room
+    const myCos = activeCosmetics();
+    if (myCos !== sentCos) {
+      sentCos = myCos;
+      session.setCosmetics?.(myCos);
+    }
     const rv = session.room();
-    // character changed (lobby switch / new player): rebuild that kart in the new style
+    // character changed (lobby switch / new player) or gold paint bought/expired: rebuild that kart in the new style
     for (const p of rv.players) {
       const wantHead = p.slot === session.mySlot ? getCustomHead() : null;
-      if (kartChar.get(p.slot) !== p.character || (karts.has(p.slot) && kartHead.get(p.slot) !== wantHead)) {
+      const gold = ((p.cos ?? 0) & Cosmetic.Gold) !== 0;
+      if (kartChar.get(p.slot) !== p.character || (kartGold.get(p.slot) ?? false) !== gold || (karts.has(p.slot) && kartHead.get(p.slot) !== wantHead)) {
         kartChar.set(p.slot, p.character);
+        kartGold.set(p.slot, gold);
         const km = karts.get(p.slot);
         if (km) {
           scene.remove(km);
@@ -406,6 +464,7 @@ function frame(now: number) {
       m.position.set(k.x, 0, k.z);
       m.rotation.y = k.heading;
       setKartEffects(m, k, t);
+      cosFx.update(k.slot, m, info.get(k.slot)?.cos ?? 0, rv.phase, t, dt);
       // floating portrait + name (hidden on your own kart: it would sit in your camera)
       const pi = info.get(k.slot);
       const plateKey = `${pi?.name ?? ""}|${pi?.character ?? 0}`;
@@ -443,8 +502,19 @@ function frame(now: number) {
         scene.remove(m);
         karts.delete(slot);
         plates.delete(slot);
+        cosFx.remove(slot);
       }
     }
+    // "Victory Confetti": goes off once when its owner crosses the line (the last finisher only shows up in the results)
+    if (rv.phase === Phase.Lobby || rv.phase === Phase.Countdown) finishSeen.clear();
+    else
+      for (const p of rv.players) {
+        if (p.finishTime < 0 || finishSeen.has(p.slot)) continue;
+        finishSeen.add(p.slot);
+        const km = karts.get(p.slot);
+        if (km && (p.cos ?? 0) & Cosmetic.Confetti) cosFx.burst(km.position.x, km.position.z);
+      }
+    cosFx.frame(dt);
     minimap.show(true);
     minimap.update(rendered.map((k) => ({ x: k.x, z: k.z, color: "#" + characterById(kartChar.get(k.slot) ?? 0).color.toString(16).padStart(6, "0"), me: k.slot === session!.mySlot })));
     if (focus) {

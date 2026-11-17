@@ -190,13 +190,16 @@ export interface PlayerInfo {
   lap: number;
   finishTime: number; // seconds, -1 if not finished
   character: number; // index into CHARACTERS
+  /** active store items (bitmask, see cosmetics.ts). Styling only. */
+  cos?: number;
 }
 
 /** Reliable-channel events (JSON). */
 export type EvtMsg =
   | { t: "welcome"; slot: number; slots: number[]; track?: number }
-  | { t: "hello"; name: string; character: number } // client -> host
+  | { t: "hello"; name: string; character: number; cos?: number } // client -> host
   | { t: "char"; character: number } // client -> host, lobby only
+  | { t: "cos"; cos: number } // client -> host: my active store items changed (any phase, styling only)
   | { t: "ping"; ts: number } // client -> host
   | { t: "pong"; ts: number } // host -> client
   | { t: "room"; phase: PhaseId; countdown: number; resultsIn: number; raceTime: number; players: PlayerInfo[]; /** dedicated rooms: seconds to auto-start, -1 = waiting for players */ autoIn?: number; track?: number };

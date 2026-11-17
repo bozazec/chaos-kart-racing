@@ -193,6 +193,23 @@ describe("GameHost (headless)", () => {
     host.setLocalCharacter(7);
     expect(host.roomMsg().players[0]!.character).toBe(5);
   });
+
+  it("shows every player's store items to the room, in any phase, and drops unknown bits", () => {
+    const fx = fakeTransport();
+    const host = new GameHost(track, fx.tx, { hostPlayer: { name: "H", character: 0, cosmetics: 1, input: () => NEUTRAL_INPUT } });
+    host.reservePeer(3);
+    host.peerReady(3);
+    host.handleEvt(3, JSON.stringify({ t: "hello", name: "Bot", character: 2, cos: 0xff05 }));
+    const cos = () => host.roomMsg().players.map((p) => p.cos);
+    expect(cos()).toEqual([1, 5]);
+    host.startRace();
+    host.setLocalCosmetics(8);
+    host.handleEvt(3, JSON.stringify({ t: "cos", cos: 2 }));
+    expect(cos()).toEqual([8, 2]);
+    expect((fx.last(3, "room") as Extract<EvtMsg, { t: "room" }>).players.map((p) => p.cos)).toEqual([8, 2]);
+    host.handleEvt(3, JSON.stringify({ t: "cos", cos: "lots" }));
+    expect(cos()).toEqual([8, 0]);
+  });
 });
 
 describe("GameHost tracks", () => {
