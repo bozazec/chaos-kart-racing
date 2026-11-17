@@ -1,5 +1,5 @@
 /**
- * Player progression: experience points (XP) and Chaos Coins, kept on this device only.
+ * Player progression: experience points (XP), Chaos Coins and the store items bought with them, kept on this device only.
  *
  * Tamper protection (client-side, so it deters casual edits, it cannot stop a determined cheater; only a server can):
  *  - the numbers live in localStorage ("kart.progress")
@@ -17,6 +17,10 @@ export interface Progress {
   total: number;
   /** Chaos Coins */
   coins: number;
+  /** store items: id -> when it runs out (epoch ms) */
+  items: Record<string, number>;
+  /** latest clock reading saved so far: setting the device clock back can't stretch an item */
+  seen: number;
 }
 
 const LS_KEY = "kart.progress";
@@ -24,7 +28,8 @@ const COOKIE = "kart_sig";
 const DB = "kart-progress";
 const STORE = "kv";
 
-let state: Progress = { xp: 0, total: 0, coins: 0 };
+const zero = (): Progress => ({ xp: 0, total: 0, coins: 0, items: {}, seen: 0 });
+let state: Progress = zero();
 let ready = false;
 let persistent = true; // false when WebCrypto/IndexedDB is unavailable: progress is kept for this session only
 let lastRaw: string | null = null;
@@ -35,6 +40,14 @@ export const getProgress = (): Readonly<Progress> => state;
 export const progressReady = () => ready;
 export const onProgress = (f: () => void) => void listeners.add(f);
 const emit = () => listeners.forEach((f) => f());
+
+/** "Now" for store items: the device clock, but never earlier than a time we already saved. */
+export const storeNow = () => Math.max(Date.now(), state.seen);
+/** When the player's item runs out (epoch ms), or 0 if they don't have it (never bought / expired). */
+export const itemExpiry = (id: string): number => {
+  const e = state.items[id] ?? 0;
+  return e > storeNow() ? e : 0;
+};
 
 /** Level from lifetime XP. Level n -> n+1 costs 100 + 50(n-1) XP. */
 export function levelFor(total: number): { level: number; into: number; need: number } {
@@ -135,7 +148,18 @@ function parse(raw: string): Progress | null {
   try {
     const o = JSON.parse(raw) as Partial<Progress>;
     const ok = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < 1e9;
-    return ok(o.xp) && ok(o.total) && ok(o.coins) ? { xp: o.xp!, total: o.total!, coins: o.coins! } : null;
+    const time = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
+    if (!ok(o.xp) || !ok(o.total) || !ok(o.coins)) return null;
+    // saves from before the store have no items
+    const items: Record<string, number> = {};
+    if (o.items !== undefined) {
+      if (typeof o.items !== "object" || o.items === null || Array.isArray(o.items)) return null;
+      for (const [k, v] of Object.entries(o.items)) {
+        if (!/^[a-z]{1,24}$/.test(k) || !time(v)) return null;
+        items[k] = v;
+      }
+    }
+    return { xp: o.xp!, total: o.total!, coins: o.coins!, items, seen: time(o.seen) ? o.seen : 0 };
   } catch {
     return null;
   }
@@ -157,6 +181,7 @@ async function verify(raw: string | null): Promise<Verdict> {
 
 async function persist(): Promise<void> {
   if (!persistent) return;
+  state = { ...state, seen: storeNow() };
   const raw = JSON.stringify(state);
   const key = await getKey(true);
   if (!key) return;
@@ -168,7 +193,7 @@ async function persist(): Promise<void> {
 }
 
 async function wipe(): Promise<void> {
-  state = { xp: 0, total: 0, coins: 0 };
+  state = zero();
   lsSet(null);
   lastRaw = null;
   try {
@@ -191,7 +216,7 @@ function popup() {
   h.textContent = "⚠️ Progress compromised";
   const p = document.createElement("p");
   p.style.cssText = "margin:0 0 14px;line-height:1.4";
-  p.textContent = "Your saved experience and coins were changed outside the game, so they can't be trusted. Your progress has been deleted and you start from zero.";
+  p.textContent = "Your saved experience, coins and store items were changed outside the game, so they can't be trusted. Your progress has been deleted and you start from zero.";
   const b = document.createElement("button");
   b.className = "k-btn";
   b.textContent = "OK";
@@ -237,7 +262,7 @@ function mutate(fn: () => void): Promise<void> {
             await wipe();
             popup();
           } else if (v === "ok") state = parse(raw!)!;
-          else state = { xp: 0, total: 0, coins: 0 };
+          else state = zero();
         }
       }
       fn();
@@ -267,4 +292,42 @@ export async function exchangeCoins(count: number): Promise<boolean> {
     done = true;
   });
   return done;
+}
+
+/** Pay `price` coins for an item. Buying one you already have adds the time on top. Resolves false if there aren't enough coins. */
+export async function buyItem(id: string, price: number, durationMs: number): Promise<boolean> {
+  const cost = Math.floor(price);
+  let done = false;
+  if (!ready || !(cost >= 0) || !(durationMs > 0)) return false;
+  await mutate(() => {
+    if (state.coins < cost) return;
+    const now = storeNow();
+    const items: Record<string, number> = {};
+    for (const [k, v] of Object.entries(state.items)) if (v > now) items[k] = v; // expired ones are dropped
+    items[id] = Math.max(now, items[id] ?? 0) + durationMs;
+    state = { ...state, coins: state.coins - cost, items };
+    done = true;
+  });
+  return done;
+}
+
+// ------------------------------------------------------------------ admin (testing)
+// Only reachable from the admin hook in main.ts, which exists in dev and VITE_ADMIN=1 builds; a normal production
+// build drops these. They go through the same signed save as real earnings, so nothing looks tampered afterwards.
+const cap = (n: number) => Math.max(0, Math.min(999_999_999, Math.floor(n) || 0));
+
+/** Add (or, with negative numbers, take away) coins and spendable XP. */
+export function adminGrant(coins: number, xp = 0): Promise<void> {
+  if (!ready) return Promise.resolve();
+  return mutate(() => {
+    state = { ...state, coins: cap(state.coins + coins), xp: cap(state.xp + xp), total: cap(state.total + Math.max(0, xp)) };
+  });
+}
+
+/** Forget every bought item, to test buying again. */
+export function adminClearItems(): Promise<void> {
+  if (!ready) return Promise.resolve();
+  return mutate(() => {
+    state = { ...state, items: {} };
+  });
 }

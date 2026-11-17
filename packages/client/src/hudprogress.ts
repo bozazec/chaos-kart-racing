@@ -1,7 +1,7 @@
 import { exchangeCoins, getProgress, levelFor, onProgress, progressReady, XP_PER_COIN } from "./progress";
 
-/** Top-right XP + Chaos Coin counters (left of the music button), a click opens the exchange. Also shows "+5 Overtake" toasts. */
-export function initProgressHud(): (xp: number, why: string) => void {
+/** Top-right XP + Chaos Coin counters (left of the music button): XP opens the exchange, coins open the store. Also shows "+5 Overtake" toasts. */
+export function initProgressHud(openStore: () => void): (xp: number, why: string) => void {
   const wrap = document.createElement("div");
   wrap.style.cssText = "position:fixed;top:12px;right:60px;z-index:60;display:flex;gap:8px;align-items:center;font:700 14px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000";
   const chip = (title: string) => {
@@ -11,7 +11,7 @@ export function initProgressHud(): (xp: number, why: string) => void {
     return b;
   };
   const xpChip = chip("Experience points. Click to exchange for Chaos Coins");
-  const coinChip = chip("Chaos Coins. Click to exchange");
+  const coinChip = chip("Chaos Coins. Click to open the store");
   wrap.append(xpChip, coinChip);
   const toasts = document.createElement("div");
   toasts.style.cssText = "position:fixed;top:146px;right:12px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:4px;pointer-events:none;font:800 15px system-ui,sans-serif;color:#ffd23f;text-shadow:0 1px 4px #000";
@@ -39,7 +39,7 @@ export function initProgressHud(): (xp: number, why: string) => void {
     const draw = () => {
       const p = getProgress();
       const max = Math.floor(p.xp / XP_PER_COIN);
-      box.innerHTML = `<h3>🪙 Chaos Coins</h3><div style="margin-bottom:10px;line-height:1.4">${XP_PER_COIN} XP = 1 coin.<br>You have <b>${p.xp} XP</b> and <b>${p.coins} coins</b>.<br><small style="opacity:.7">Coins will buy kart upgrades.</small></div>`;
+      box.innerHTML = `<h3>🪙 Chaos Coins</h3><div style="margin-bottom:10px;line-height:1.4">${XP_PER_COIN} XP = 1 coin.<br>You have <b>${p.xp} XP</b> and <b>${p.coins} coins</b>.<br><small style="opacity:.7">Spend coins in the store: click 🪙.</small></div>`;
       const row = document.createElement("div");
       row.className = "k-row";
       const mk = (txt: string, n: number) => {
@@ -64,9 +64,13 @@ export function initProgressHud(): (xp: number, why: string) => void {
     document.body.append(box);
     open = box;
   };
-  xpChip.onclick = coinChip.onclick = () => {
+  xpChip.onclick = () => {
     exchange();
     xpChip.blur();
+  };
+  coinChip.onclick = () => {
+    if (open) exchange(); // the store has its own exchange row
+    openStore();
     coinChip.blur();
   };
 

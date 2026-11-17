@@ -5,6 +5,7 @@ export * from "./sim";
 export * from "./protocol";
 export * from "./race";
 export * from "./characters";
+export * from "./cosmetics";
 export * from "./items";
 export * from "./gamehost";
 export * from "./layout";

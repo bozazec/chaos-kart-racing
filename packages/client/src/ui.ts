@@ -1,5 +1,5 @@
 import { captureHead, getCustomHead, onCustomHeadChange, saveHeadFromFile, setCustomHead } from "./customhead";
-import { buildTrackById, characterById, CHARACTERS, DEFAULT_PARAMS, MAX_PLAYERS, paramsFor, Phase, SPECIAL_CD, STUN_TICKS, trackDef, TRACKS, type PlayerInfo, type RoomInfo } from "@kart/shared";
+import { buildTrackById, characterById, CHARACTERS, COSMETICS, DEFAULT_PARAMS, MAX_PLAYERS, paramsFor, Phase, SPECIAL_CD, STUN_TICKS, trackDef, TRACKS, type PlayerInfo, type RoomInfo } from "@kart/shared";
 import { trackPreviewUrl } from "./minimap";
 import { ROOMS_URL } from "./net/signaling";
 import type { RoomView } from "./session";
@@ -36,6 +36,11 @@ const portrait = (id: number) => `/art/characters/c${id}.jpg`;
 const avatar = (character: number, size = 30) => {
   const c = characterById(character);
   return h("img", { class: "k-av", src: portrait(c.id), alt: c.name, title: c.name, style: `width:${size}px;height:${size}px;border-color:${hex(c.color)}` });
+};
+/** Icons of a player's active store items, shown next to their name. */
+const cosIcons = (mask = 0) => {
+  const own = COSMETICS.filter((c) => mask & c.bit);
+  return own.length ? h("span", { class: "k-tag", style: "opacity:1;letter-spacing:1px", title: own.map((c) => c.name).join(", "), textContent: own.map((c) => c.icon).join("") }) : "";
 };
 const fmt = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, "0")}`;
 export const ITEM_INFO: Record<number, { icon: string; name: string }> = {
@@ -421,6 +426,7 @@ export function createRoomUI(act: RoomActions) {
       showPos ? h("b", { textContent: p.pos ? `${p.pos}.` : "–", style: "width:24px" }) : "",
       avatar(p.character),
       h("span", { class: "n", textContent: p.name + (p.slot === mySlot ? " (you)" : "") }),
+      cosIcons(p.cos),
       p.waiting ? h("span", { class: "k-tag", textContent: "waiting" }) : showTime ? h("span", { class: "k-tag", textContent: p.finishTime >= 0 ? fmt(p.finishTime) : "DNF" }) : "",
     );
 
